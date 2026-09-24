@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>빛의 세기와 거리</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2433; --muted:#5b6475; --line:#dde1e8; --accent:#2563eb; --accent-ink:#fff; --ok:#15803d; --warn:#b45309; --tip:#eef4ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui, "Noto Sans KR", sans-serif; }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 16px; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; }
+  header h1 { font-size:18px; margin:0 auto 0 0; }
+  main { max-width:960px; margin:0 auto; padding:16px; }
+  nav { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; }
+  nav button { flex:1 1 150px; padding:10px; border:1px solid var(--line); background:var(--card); border-radius:10px; font:inherit; cursor:pointer; }
+  nav button.on { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+  section { display:none; } section.on { display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .card h2 { font-size:17px; margin:0 0 10px; }
+  .tip { background:var(--tip); border-radius:10px; padding:12px 14px; margin:10px 0; }
+  label.q { display:block; font-weight:600; margin:14px 0 6px; }
+  textarea, input[type=text], input[type=number], select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font:inherit; background:var(--card); color:var(--ink); }
+  textarea { min-height:70px; resize:vertical; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+  .row > * { flex:1 1 140px; }
+  button.btn { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:var(--accent-ink); font:inherit; font-weight:600; cursor:pointer; }
+  button.btn.sub { background:var(--card); color:var(--accent); border:1px solid var(--accent); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .checks label { display:block; padding:4px 0; }
+  .big { font-size:32px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .muted { color:var(--muted); font-size:14px; }
+  .status { font-weight:600; } .status.ok { color:var(--ok); } .status.warn { color:var(--warn); }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:right; }
+  th { background:var(--bg); font-size:14px; } th.auto { color:var(--accent); }
+  .scroll { overflow-x:auto; }
+  .axes { display:flex; gap:8px; flex-wrap:wrap; }
+  .axes label { border:1px solid var(--line); border-radius:8px; padding:8px 12px; cursor:pointer; }
+  .axes input:checked + span { font-weight:700; color:var(--accent); }
+  .chartbox { position:relative; height:360px; }
+  .fit { font-size:18px; font-weight:600; margin-top:8px; }
+  #toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#1d2433; color:#fff; padding:10px 18px; border-radius:10px; display:none; max-width:90vw; }
+</style>
+</head>
+<body>
+<header>
+  <h1>💡 빛의 세기와 거리 탐구</h1>
+  <span class="muted" id="who">로그인 확인 중…</span>
+  <select id="cls" style="width:auto"><option value="">반 선택</option><option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option></select>
+  <select id="group" style="width:auto"><option value="">모둠 선택</option></select>
+</header>
+
+<main>
+<nav>
+  <button data-tab="t1">① 실험 설계 <small>(개인)</small></button>
+  <button data-tab="t2">② 실험 준비 <small>(모둠)</small></button>
+  <button data-tab="t3">③ 측정 <small>(모둠)</small></button>
+  <button data-tab="t4">④ 분석·보고서 <small>(개인)</small></button>
+</nav>
+
+<!-- ① 실험 설계 -->
+<section id="t1">
+  <div class="card">
+    <h2>탐구 질문</h2>
+    <p class="big" style="font-size:20px">광원에서 멀어질수록 빛의 밝기(조도)는 어떻게 변할까?</p>
+    <label class="q">가설: 거리와 조도 사이에 어떤 관계가 있을지 예상해서 써 보세요.</label>
+    <textarea data-k="hyp" placeholder="예) 거리가 멀어지면 조도는 ○○할 것이다. 왜냐하면…"></textarea>
+  </div>
+  <div class="card">
+    <h2>변인 정하기</h2>
+    <div class="row">
+      <div><label class="q">독립변인 (내가 바꾸는 것)</label><select data-k="indep"></select></div>
+      <div><label class="q">종속변인 (그 결과로 측정하는 것)</label><select data-k="dep"></select></div>
+    </div>
+    <label class="q">통제변인 (똑같이 유지해야 하는 것): 모두 고르세요</label>
+    <div class="checks" id="ctrl"></div>
+    <label class="q">측정 계획: 몇 cm부터 몇 cm까지, 몇 cm 간격으로 잴까요?</label>
+    <input type="text" data-k="plan" placeholder="예) 5cm부터 30cm까지 5cm 간격 (6번)">
+    <p class="tip">💡 너무 가까우면 LED가 한 점처럼 보이지 않고, 너무 멀면 주변 빛에 묻혀요. <b>5~30cm</b> 정도를 추천해요.</p>
+  </div>
+</section>
+
+<!-- ② 실험 준비 -->
+<section id="t2">
+  <div class="card">
+    <h2>1. 조도센서 연결</h2>
+    <p class="muted">센서 전원을 켜고, <b>스파크뷰에 연결되어 있다면 먼저 연결을 끊으세요.</b> (센서는 한 기기에만 연결돼요)</p>
+    <div class="row">
+      <button class="btn" id="connect">🔗 센서 연결 (블루투스)</button>
+      <label style="flex:0 1 auto"><input type="checkbox" id="manual"> 수동 입력 모드 (스파크뷰 값을 보고 직접 입력)</label>
+    </div>
+    <p>상태: <span class="status" id="bstat">연결 안 됨</span></p>
+    <p>현재 조도: <span class="big" id="live">–</span> lx</p>
+  </div>
+  <div class="card">
+    <h2>2. 기구 세팅 체크리스트</h2>
+    <div class="checks" id="setup"></div>
+  </div>
+  <div class="card">
+    <h2>3. 배경 조도 측정 (LED를 끈 상태)</h2>
+    <p class="muted">LED를 끄고 센서를 실험 위치에 둔 채로 주변 빛의 밝기를 재요. 이후 측정값에서 자동으로 빼 줘요.</p>
+    <div class="row">
+      <div><label class="q">배경 조도 (lx)</label><input type="number" id="bg" step="any"></div>
+      <button class="btn sub" id="bgread" style="flex:0 1 auto">센서로 배경 측정</button>
+    </div>
+  </div>
+</section>
+
+<!-- ③ 측정 -->
+<section id="t3">
+  <div class="card">
+    <h2>데이터 기록</h2>
+    <p class="muted">LED를 켜고, 센서를 원하는 거리에 둔 뒤 거리를 입력하고 [기록]을 누르세요. 센서 모드에서는 약 1초 동안의 평균값이 기록돼요.</p>
+    <div class="row">
+      <div><label class="q">거리 d (cm)</label><input type="number" id="din" min="0" step="any"></div>
+      <div><label class="q">조도 (lx)</label><input type="number" id="luxin" step="any" placeholder="센서 모드면 자동"></div>
+      <button class="btn" id="keep" style="flex:0 1 auto">📍 기록</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>측정 결과표</h2>
+    <p class="muted"><span style="color:var(--accent)">파란 제목</span> 열은 자동으로 계산돼요. 배경 조도: <b id="bgshow">0</b> lx</p>
+    <div class="scroll"><table>
+      <thead><tr><th>거리 d (cm)</th><th>조도 측정값 (lx)</th><th class="auto">조도 (배경 뺀 값)</th><th class="auto">d² (cm²)</th><th class="auto">1/d (1/cm)</th><th class="auto">1/d² (1/cm²)</th><th></th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="gsubmit">📤 모둠 데이터 제출</button>
+      <button class="btn sub" id="gload">📥 모둠 데이터 불러오기</button>
+    </div>
+    <p class="muted">모둠에서 한 명이 제출하면, 다른 모둠원은 [불러오기]로 같은 데이터를 받아요.</p>
+  </div>
+</section>
+
+<!-- ④ 분석·보고서 -->
+<section id="t4">
+  <div class="card">
+    <h2>그래프의 축은 어떻게 고를까?</h2>
+    <div class="tip">
+      <b>y축</b>: 실험에서 측정한 결과(종속변인)인 <b>조도(배경 뺀 값)</b><br>
+      <b>x축</b>: 내가 바꾼 것(독립변인)인 <b>거리</b>. 그런데 거리 대신 거리로 계산한 값(d², 1/d, 1/d²)을 x축으로 쓸 수도 있어요.<br>
+      🎯 <b>목표</b>: 점들이 <b>원점을 지나는 직선</b> 위에 놓이게 하는 x축을 찾아요. 그러면 "y는 x에 비례한다"고 말할 수 있어요.<br>
+      📏 <b>R²(결정계수)</b>: 1에 가까울수록 점들이 직선에 잘 맞는다는 뜻이에요.
+    </div>
+    <p class="q">x축 고르기 (4가지를 모두 눌러 보세요)</p>
+    <div class="axes" id="axes"></div>
+    <div class="chartbox"><canvas id="chart"></canvas></div>
+    <div class="fit" id="fit"></div>
+    <p class="q">R² 비교표</p>
+    <div class="scroll"><table><thead><tr id="r2head"></tr></thead><tbody><tr id="r2row"></tr></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>그래프 해석</h2>
+    <label class="q">Q1. x축을 '거리 d'로 했을 때 그래프는 어떤 모양인가요? 표를 보고, 거리가 2배(10cm → 20cm)가 되면 조도는 약 몇 분의 1이 되는지 계산해 보세요.</label>
+    <textarea data-k="q1"></textarea>
+    <label class="q">Q2. 4가지 x축 중 점들이 원점을 지나는 직선에 가장 가까운 것은 무엇인가요? R² 값을 근거로 쓰세요.</label>
+    <textarea data-k="q2"></textarea>
+    <label class="q">Q3. 그렇다면 조도와 거리 사이의 관계를 한 문장으로 쓰면?</label>
+    <textarea data-k="q3" placeholder="조도는 ○○에 ○○한다."></textarea>
+  </div>
+  <div class="card">
+    <h2>결론 및 평가</h2>
+    <label class="q">결론: 가설과 비교해서 실험 결과로 알게 된 것을 쓰세요.</label>
+    <textarea data-k="conclusion"></textarea>
+    <label class="q">오차 원인: 결과가 완벽한 직선이 아닌 이유는 무엇일까요?</label>
+    <textarea data-k="error" placeholder="예) 주변 빛, 거리 측정, LED가 완전한 점광원이 아님, LED 빛이 앞쪽으로만 나옴…"></textarea>
+    <label class="q">느낀 점</label>
+    <textarea data-k="feel"></textarea>
+    <p class="muted">제출하면 지금 화면의 그래프(선택한 x축)가 함께 제출돼요.</p>
+    <button class="btn" id="rsubmit">📨 보고서 제출</button>
+  </div>
+</section>
+</main>
+<div id="toast"></div>
+
+<script>
+// ---------- 파스코 무선 조도센서(PS-3213) Web Bluetooth ----------
+// 프로토콜 출처: PASCO 공식 python 라이브러리(pasco 0.3.x) pasco_ble_device.py / datasheets.py
+const PASCO = (() => {
+  const uuid = (s, c) => `4a5c000${s}-000${c}-0000-0000-5c1e741f1c00`;
+  let dev, send, waiter, chain = Promise.resolve();
+
+  async function connect(onDisconnect) {
+    dev = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'Light' }],
+      optionalServices: [0, 1, 2].map(s => uuid(s, 0)),
+    });
+    dev.addEventListener('gattserverdisconnected', () => { send = null; onDisconnect(); });
+    const svc = await (await dev.gatt.connect()).getPrimaryService(uuid(1, 0));
+    for (const ch of await svc.getCharacteristics()) {
+      if (!ch.properties.notify) continue;
+      ch.addEventListener('characteristicvaluechanged', e => {
+        const v = new Uint8Array(e.target.value.buffer, e.target.value.byteOffset, e.target.value.byteLength);
+        if (v[0] === 0xC0 && v[1] === 0 && v[2] === 0x05 && waiter) waiter(v.slice(3));
+      });
+      await ch.startNotifications();
+    }
+    send = await svc.getCharacteristic(uuid(1, 2));
+    return dev.name;
+  }
+
+  // 1회 측정: 채널0(센서 2030)은 2바이트 원시값 7개(R,G,B,IR,UVA,UVB,UVI) → 조도 = 2 × G
+  // ponytail: 공장 보정값은 읽지 않음(라이브러리와 동일). 절대값이 스파크뷰와 조금 달라도 비례 관계엔 영향 없음
+  function readOnce() {
+    return chain = chain.catch(() => {}).then(() => new Promise((res, rej) => {
+      if (!send) return rej(new Error('센서가 연결되지 않았어요.'));
+      const t = setTimeout(() => { waiter = null; rej(new Error('센서 응답이 없어요.')); }, 2000);
+      waiter = p => { clearTimeout(t); waiter = null; res(2 * (p[2] | p[3] << 8)); };
+      send.writeValue(new Uint8Array([0x05, 14])).catch(e => { clearTimeout(t); rej(e); });
+    }));
+  }
+
+  async function readAvg(n = 5) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) { sum += await readOnce(); await new Promise(r => setTimeout(r, 200)); }
+    return sum / n;
+  }
+
+  return { connect, readOnce, readAvg, get connected() { return !!send; } };
+})();
+
+// ---------- 서버 호출 (Apps Script) / 로컬 개발용 대체 ----------
+const DEV = {
+  whoami: () => 'dev@local (개발 모드)',
+  submitGroup: d => { localStorage.setItem('dev-group-' + d.cls + '-' + d.group, JSON.stringify(d)); return true; },
+  loadGroup: (c, g) => JSON.parse(localStorage.getItem('dev-group-' + c + '-' + g) || 'null'),
+  submitReport: r => { console.log('[dev] report', r); return '(개발 모드: 저장 안 됨)'; },
+};
+const api = (fn, ...args) => new Promise((res, rej) => {
+  if (!window.google?.script?.run) return res(DEV[fn](...args));
+  google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args);
+});
+
+// ---------- 상태 (브라우저에 임시 저장) ----------
+const KEY = 'ldexp-v1';
+let S;
+try { S = JSON.parse(localStorage.getItem(KEY)); } catch {}
+S = Object.assign({ cls: '', group: '', a: {}, bg: 0, rows: [], xaxis: 'd', r2s: {}, setup: [] }, S);
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+
+const $ = s => document.querySelector(s);
+const toast = msg => { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3500); };
+const fmt = v => !isFinite(v) ? '–' : Math.abs(v) >= 100 ? v.toFixed(1) : Number(v.toPrecision(3)).toString();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ---------- 탭 ----------
+function showTab(id) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === id));
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === id));
+  S.tab = id; save();
+  if (id === 't4') drawChart();
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ---------- 헤더: 반/모둠 ----------
+for (let i = 1; i <= 12; i++) $('#group').add(new Option(i + '모둠', i));
+$('#cls').value = S.cls; $('#group').value = S.group;
+$('#cls').onchange = e => { S.cls = e.target.value; save(); };
+$('#group').onchange = e => { S.group = e.target.value; save(); };
+api('whoami').then(e => $('#who').textContent = e || '⚠️ 학교 계정으로 로그인하세요').catch(() => $('#who').textContent = '⚠️ 로그인 확인 실패');
+const needClass = () => { if (S.cls && S.group) return false; toast('맨 위에서 반과 모둠을 먼저 선택하세요.'); return true; };
+
+// ---------- ① 설계: 입력칸 자동 저장 ----------
+const VARS = ['광원과 센서 사이의 거리', '빛의 밝기(조도)', 'LED의 밝기 설정', '주변 밝기'];
+document.querySelectorAll('select[data-k]').forEach(sel => { sel.add(new Option('선택하세요', '')); VARS.forEach(v => sel.add(new Option(v))); });
+const CTRLS = ['LED의 색과 밝기 설정', '주변 밝기 (커튼, 형광등)', '센서의 높이와 방향', '켜는 LED의 개수 (1개)', '광원과 센서 사이의 거리', '빛의 밝기(조도)'];
+$('#ctrl').innerHTML = CTRLS.map(c => `<label><input type="checkbox" value="${c}"> ${c}</label>`).join('');
+const ctrlBoxes = [...document.querySelectorAll('#ctrl input')];
+ctrlBoxes.forEach(b => { b.checked = (S.a.ctrl || '').split(', ').includes(b.value); b.onchange = () => { S.a.ctrl = ctrlBoxes.filter(x => x.checked).map(x => x.value).join(', '); save(); }; });
+document.querySelectorAll('[data-k]').forEach(el => { el.value = S.a[el.dataset.k] || ''; el.oninput = el.onchange = () => { S.a[el.dataset.k] = el.value; save(); }; });
+
+// ---------- ② 준비 ----------
+const SETUP = [
+  '커튼을 치고 불필요한 조명을 껐다',
+  '네오픽셀 LED는 딱 1개만 켜고, 색(흰색)과 밝기(최대 255)를 선생님이 정한 값으로 고정했다',
+  'LED와 센서의 높이를 맞추고, 센서가 LED 정면을 똑바로 향하게 했다',
+  '줄자의 0점을 LED 칩 표면에 맞췄다',
+  '측정하는 동안 센서 앞을 몸이나 손으로 가리지 않는다',
+];
+$('#setup').innerHTML = SETUP.map((s, i) => `<label><input type="checkbox" data-i="${i}" ${S.setup.includes(i) ? 'checked' : ''}> ${s}</label>`).join('');
+document.querySelectorAll('#setup input').forEach(b => b.onchange = () => { S.setup = [...document.querySelectorAll('#setup input:checked')].map(x => +x.dataset.i); save(); });
+
+const setStat = (msg, cls = '') => { const s = $('#bstat'); s.textContent = msg; s.className = 'status ' + cls; };
+function applyMode() {
+  const manual = $('#manual').checked;
+  S.manual = manual; save();
+  $('#luxin').readOnly = !manual;
+  $('#luxin').placeholder = manual ? '스파크뷰 값을 입력' : '센서 모드면 자동';
+  $('#bgread').disabled = manual;
+}
+$('#manual').checked = !!S.manual; applyMode();
+$('#manual').onchange = applyMode;
+
+$('#connect').onclick = async () => {
+  if (!navigator.bluetooth) return setStat('이 환경에서는 블루투스를 쓸 수 없어요. 수동 입력 모드를 사용하세요.', 'warn');
+  try {
+    setStat('연결 중…');
+    const name = await PASCO.connect(() => setStat('연결이 끊겼어요. 다시 연결하세요.', 'warn'));
+    setStat('연결됨: ' + name, 'ok');
+    $('#manual').checked = false; applyMode();
+  } catch (e) {
+    setStat('연결 실패: ' + e.message + ' → 수동 입력 모드를 사용하세요.', 'warn');
+  }
+};
+setInterval(async () => {
+  if (!PASCO.connected || document.hidden) return;
+  try { const v = await PASCO.readOnce(); $('#live').textContent = fmt(v); $('#luxin').value = S.manual ? $('#luxin').value : v.toFixed(1); } catch {}
+}, 1000);
+
+$('#bg').value = S.bg || '';
+$('#bg').oninput = () => { S.bg = Number($('#bg').value) || 0; save(); renderTable(); };
+$('#bgread').onclick = async () => {
+  try { toast('배경 조도 측정 중…'); const v = await PASCO.readAvg(); S.bg = +v.toFixed(1); $('#bg').value = S.bg; save(); renderTable(); toast('배경 조도: ' + S.bg + ' lx'); }
+  catch (e) { toast(e.message); }
+};
+
+// ---------- ③ 측정 ----------
+const corr = r => r.lux - (S.bg || 0);
+function renderTable() {
+  $('#bgshow').textContent = S.bg || 0;
+  S.rows.sort((a, b) => a.d - b.d);
+  $('#tbody').innerHTML = S.rows.map((r, i) => `<tr><td>${fmt(r.d)}</td><td>${fmt(r.lux)}</td><td>${fmt(corr(r))}</td>
+    <td>${fmt(r.d * r.d)}</td><td>${fmt(1 / r.d)}</td><td>${fmt(1 / (r.d * r.d))}</td>
+    <td><button class="btn sub" data-del="${i}" style="padding:2px 10px">삭제</button></td></tr>`).join('')
+    || '<tr><td colspan="7" style="text-align:center" class="muted">아직 기록이 없어요</td></tr>';
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { S.rows.splice(+b.dataset.del, 1); S.r2s = {}; save(); renderTable(); });
+}
+renderTable();
+
+$('#keep').onclick = async () => {
+  const d = Number($('#din').value);
+  if (!(d > 0)) return toast('거리(cm)를 0보다 큰 숫자로 입력하세요.');
+  let lux;
+  if (S.manual) {
+    lux = Number($('#luxin').value);
+    if ($('#luxin').value === '' || !isFinite(lux)) return toast('조도 값을 입력하세요.');
+  } else {
+    if (!PASCO.connected) return toast('센서를 연결하거나 [실험 준비]에서 수동 입력 모드를 켜세요.');
+    $('#keep').disabled = true;
+    try { lux = await PASCO.readAvg(); } catch (e) { return toast(e.message); } finally { $('#keep').disabled = false; }
+  }
+  const same = S.rows.findIndex(r => r.d === d);
+  if (same >= 0) S.rows.splice(same, 1); // 같은 거리는 재측정으로 덮어쓰기
+  S.rows.push({ d, lux: +lux.toFixed(1) });
+  S.r2s = {}; save(); renderTable();
+  $('#din').value = ''; if (S.manual) $('#luxin').value = '';
+  $('#din').focus();
+  toast(`${d}cm: ${lux.toFixed(1)} lx 기록`);
+};
+
+$('#gsubmit').onclick = async () => {
+  if (needClass()) return;
+  if (S.rows.length < 3) return toast('3개 이상 측정한 뒤 제출하세요.');
+  try { await api('submitGroup', { cls: S.cls, group: S.group, bg: S.bg || 0, rows: S.rows }); toast('모둠 데이터를 제출했어요 ✅'); }
+  catch (e) { toast('제출 실패: ' + e.message); }
+};
+$('#gload').onclick = async () => {
+  if (needClass()) return;
+  try {
+    const g = await api('loadGroup', S.cls, S.group);
+    if (!g) return toast('아직 우리 모둠이 제출한 데이터가 없어요.');
+    S.rows = g.rows; S.bg = g.bg; S.r2s = {}; $('#bg').value = S.bg; save(); renderTable();
+    toast(`불러왔어요 (${g.rows.length}개, 제출: ${g.by || ''})`);
+  } catch (e) { toast('불러오기 실패: ' + e.message); }
+};
+
+// ---------- ④ 분석 ----------
+const AX = {
+  d:    { name: '거리 d',  label: '거리 d (cm)',       f: d => d },
+  d2:   { name: 'd²',      label: 'd² (cm²)',          f: d => d * d },
+  inv:  { name: '1/d',     label: '1/d (1/cm)',        f: d => 1 / d },
+  inv2: { name: '1/d²',    label: '1/d² (1/cm²)',      f: d => 1 / (d * d) },
+};
+function fit(xs, ys) {
+  const n = xs.length, mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+  let sxx = 0, sxy = 0, sst = 0, sse = 0;
+  xs.forEach((x, i) => { sxx += (x - mx) ** 2; sxy += (x - mx) * (ys[i] - my); sst += (ys[i] - my) ** 2; });
+  const a = sxy / sxx, b = my - a * mx;
+  xs.forEach((x, i) => { sse += (ys[i] - (a * x + b)) ** 2; });
+  return { a, b, r2: sst ? 1 - sse / sst : 1 };
+}
+
+$('#axes').innerHTML = Object.entries(AX).map(([k, v]) => `<label><input type="radio" name="ax" value="${k}" ${S.xaxis === k ? 'checked' : ''}> <span>x = ${v.name}</span></label>`).join('');
+document.querySelectorAll('input[name=ax]').forEach(r => r.onchange = () => { S.xaxis = r.value; save(); drawChart(); });
+$('#r2head').innerHTML = Object.values(AX).map(v => `<th style="text-align:center">x = ${v.name}</th>`).join('');
+
+let chart;
+const whiteBg = { id: 'whiteBg', beforeDraw: c => { const x = c.ctx; x.save(); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.restore(); } };
+function drawChart() {
+  const ax = AX[S.xaxis], rows = S.rows;
+  if (chart) chart.destroy();
+  if (rows.length < 2) { $('#fit').textContent = '측정 데이터가 2개 이상 있어야 그래프를 그릴 수 있어요. (③ 측정에서 [불러오기])'; renderR2(); return; }
+  const pts = rows.map(r => ({ x: ax.f(r.d), y: corr(r) }));
+  const f = fit(pts.map(p => p.x), pts.map(p => p.y));
+  const xmax = Math.max(...pts.map(p => p.x));
+  S.r2s[S.xaxis] = f.r2; save();
+  chart = new Chart($('#chart'), {
+    type: 'scatter',
+    data: { datasets: [
+      { type: 'scatter', label: '측정값', data: pts, backgroundColor: '#2563eb', pointRadius: 6, pointHoverRadius: 8 },
+      { type: 'line', label: '추세선', data: [{ x: 0, y: f.b }, { x: xmax * 1.05, y: f.a * xmax * 1.05 + f.b }], borderColor: '#d97706', borderWidth: 2, borderDash: [6, 4], pointRadius: 0 },
+    ] },
+    options: {
+      maintainAspectRatio: false, animation: false,
+      scales: {
+        x: { type: 'linear', min: 0, title: { display: true, text: ax.label } },
+        y: { title: { display: true, text: '조도 (lx, 배경 뺀 값)' } },
+      },
+      plugins: { tooltip: { callbacks: { label: c => `x=${fmt(c.parsed.x)}, 조도=${fmt(c.parsed.y)} lx` } } },
+    },
+    plugins: [whiteBg],
+  });
+  $('#fit').textContent = `추세선: y = ${fmt(f.a)}x ${f.b < 0 ? '−' : '+'} ${fmt(Math.abs(f.b))}   |   R² = ${f.r2.toFixed(4)}`;
+  renderR2();
+}
+function renderR2() {
+  $('#r2row').innerHTML = Object.keys(AX).map(k => `<td style="text-align:center">${S.r2s[k] != null ? S.r2s[k].toFixed(4) : '?'}</td>`).join('');
+}
+
+$('#rsubmit').onclick = async () => {
+  if (needClass()) return;
+  const need = { hyp: '가설', q2: 'Q2', q3: 'Q3', conclusion: '결론' };
+  const miss = Object.keys(need).filter(k => !(S.a[k] || '').trim()).map(k => need[k]);
+  if (miss.length) return toast('아직 안 쓴 칸: ' + miss.join(', '));
+  if (!chart) return toast('그래프를 먼저 그려 주세요.');
+  $('#rsubmit').disabled = true;
+  try {
+    const r2table = Object.keys(AX).map(k => `${AX[k].name}: ${S.r2s[k] != null ? S.r2s[k].toFixed(4) : '-'}`).join(' / ');
+    await api('submitReport', { cls: S.cls, group: S.group, answers: S.a, xaxis: AX[S.xaxis].name, r2: S.r2s[S.xaxis], r2table, png: chart.toBase64Image('image/png') });
+    toast('보고서를 제출했어요 🎉 (다시 제출하면 새 제출로 추가돼요)');
+  } catch (e) { toast('제출 실패: ' + e.message); }
+  finally { $('#rsubmit').disabled = false; }
+};
+
+showTab(S.tab || 't1');
+
+// ---------- 자가 점검: 주소 뒤에 ?test ----------
+if (location.search.includes('test')) {
+  const ds = [5, 10, 15, 20, 25, 30], ys = ds.map(d => 10000 / (d * d));
+  const r = k => fit(ds.map(AX[k].f), ys).r2;
+  console.assert(r('inv2') > 0.9999, 'inv2 should be linear');
+  console.assert(r('d') < 0.9 && r('inv') < r('inv2') && r('d2') < r('inv2'), 'others worse than inv2');
+  const f = fit([1, 2, 3], [2, 4, 6]); console.assert(Math.abs(f.a - 2) < 1e-9 && Math.abs(f.b) < 1e-9, 'fit y=2x');
+  console.log('self-test done', { d: r('d'), d2: r('d2'), inv: r('inv'), inv2: r('inv2') });
+}
+</script>
+</body>
+</html>
