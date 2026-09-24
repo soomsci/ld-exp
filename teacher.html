@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>교사 대시보드</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2433; --muted:#5b6475; --line:#dde1e8; --accent:#2563eb; --accent-ink:#fff; --ok:#15803d; --bad:#dc2626; --warn:#b45309; --sel:#eef4ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 system-ui, "Noto Sans KR", sans-serif; }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 16px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  header h1 { font-size:18px; margin:0 auto 0 0; }
+  main { max-width:1280px; margin:0 auto; padding:16px; }
+  nav { display:flex; gap:6px; margin-bottom:16px; }
+  nav button { padding:10px 18px; border:1px solid var(--line); background:var(--card); border-radius:10px; font:inherit; cursor:pointer; }
+  nav button.on { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+  section { display:none; } section.on { display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }
+  .grid { display:grid; grid-template-columns:minmax(320px, 2fr) 3fr; gap:16px; align-items:start; }
+  @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
+  .btn { padding:8px 14px; border:0; border-radius:8px; background:var(--accent); color:var(--accent-ink); font:inherit; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+  .btn.sub { background:var(--card); color:var(--accent); border:1px solid var(--accent); }
+  .btn.sm { padding:2px 10px; font-weight:400; }
+  button:disabled { opacity:.5; }
+  select, input, textarea { padding:6px 8px; border:1px solid var(--line); border-radius:8px; font:inherit; background:var(--card); color:var(--ink); }
+  textarea { width:100%; min-height:60px; resize:vertical; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+  th { background:var(--bg); font-size:13px; color:var(--muted); }
+  #list tr { cursor:pointer; } #list tr:hover { background:var(--bg); } #list tr.sel { background:var(--sel); }
+  .muted { color:var(--muted); font-size:13px; }
+  .badge { display:inline-block; padding:0 8px; border-radius:99px; font-size:12px; border:1px solid currentColor; }
+  .s-채점완료 { color:var(--ok); } .s-제출 { color:var(--accent); } .s-재제출 { color:var(--warn); }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+  .q { border-top:1px solid var(--line); padding:12px 0; }
+  .q:first-of-type { border-top:0; }
+  .qtext { font-weight:600; }
+  .ans { white-space:pre-wrap; background:var(--bg); border-radius:8px; padding:8px 10px; margin:6px 0; min-height:1.6em; }
+  .score { display:flex; gap:6px; align-items:center; }
+  .score input { width:80px; }
+  .filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .total { font-size:20px; font-weight:700; }
+  img.graph { max-width:100%; border:1px solid var(--line); border-radius:8px; }
+  #qedit td { vertical-align:middle; }
+  #qedit textarea { min-height:48px; }
+  #toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#1d2433; color:#fff; padding:10px 18px; border-radius:10px; display:none; max-width:90vw; z-index:9; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📋 교사 대시보드: 빛의 세기와 거리</h1>
+  <button class="btn sub" id="reload">🔄 새로고침</button>
+  <button class="btn sub" id="export">📊 성적표 시트로 내보내기</button>
+  <a class="btn sub" id="sheet" target="_blank">시트 열기</a>
+</header>
+<main>
+<nav>
+  <button data-tab="grade" class="on">제출 현황 · 채점</button>
+  <button data-tab="qs">문항 · 배점 편집</button>
+</nav>
+
+<section id="grade" class="on">
+  <div class="grid">
+    <div class="card">
+      <div class="filters">
+        <select id="fcls"><option value="">전체 반</option><option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option></select>
+        <select id="fstat"><option value="">전체 상태</option><option value="todo">채점 필요</option><option value="done">채점완료</option></select>
+        <span class="muted" id="summary"></span>
+      </div>
+      <table><thead><tr><th>반</th><th>번호</th><th>이름</th><th>모둠</th><th>제출</th><th>상태</th><th>총점</th></tr></thead><tbody id="list"></tbody></table>
+    </div>
+    <div class="card" id="detail"><p class="muted">왼쪽 목록에서 학생을 고르세요.</p></div>
+  </div>
+</section>
+
+<section id="qs">
+  <div class="card">
+    <p class="muted">발문, 배점, 필수 여부, 순서를 고치고 <b>[저장]</b>을 누르면 학생 화면에 바로 반영돼요 (학생은 새로고침 필요).
+      <b>변인 선택</b>과 <b>그래프</b> 유형은 하나씩만 둘 수 있어요. 문항을 삭제하면 그 문항의 답변과 점수는 대시보드에서 보이지 않게 돼요.</p>
+    <table><thead><tr><th style="width:70px">순서</th><th style="width:90px">단계</th><th style="width:120px">유형</th><th>발문</th><th style="width:80px">배점</th><th style="width:50px">필수</th><th style="width:60px"></th></tr></thead>
+      <tbody id="qedit"></tbody></table>
+    <p style="margin-top:12px"><button class="btn sub" id="qadd">+ 문항 추가</button> <button class="btn" id="qsave">💾 저장</button>
+      <span class="total" id="qtotal" style="margin-left:12px"></span></p>
+  </div>
+</section>
+</main>
+<div id="toast"></div>
+
+<script>
+// ---------- 서버 호출 / 로컬 개발용 가짜 데이터 ----------
+const DEV = {
+  listReports: () => ({ sheetUrl: '#', questions: DEV.qs, reports: [
+    { email: 's1@school', cls: 2, num: 3, name: '김학생', group: 3, at: '09/24 19:00', status: '제출', total: '', feedback: '', scores: {}, img: '',
+      answers: { q1: '거리가 멀어지면 어두워질 것이다.', q2: { indep: '광원과 센서 사이의 거리', dep: '빛의 밝기(조도)', ctrl: 'LED의 색과 밝기 설정, 주변 밝기 (커튼·형광등), 광원과 센서 사이의 거리' }, q4: { xaxis: '1/d²', r2: 0.998, r2table: '거리 d: 0.6150 / d²: 0.4326 / 1/d: 0.9679 / 1/d²: 0.9980' }, q7: '조도는 거리의 제곱에 반비례한다.' } },
+    { email: 's2@school', cls: 1, num: 7, name: '이학생', group: 1, at: '09/24 19:05', status: '채점완료', total: 8, feedback: '잘했어요', scores: { q1: 2, q2: 2, q4: 2, q7: 2 }, img: '', answers: { q1: '가설', q7: '반비례' } },
+  ] }),
+  qs: [
+    { id: 'q1', stage: '설계', type: 'text', text: '가설', points: 2, required: true },
+    { id: 'q2', stage: '설계', type: 'vars', text: '변인 정하기', points: 3, required: true },
+    { id: 'q4', stage: '분석', type: 'graph', text: '그래프 그리기', points: 2, required: true },
+    { id: 'q7', stage: '분석', type: 'text', text: 'Q3. 관계', points: 3, required: true },
+  ],
+  loadGroup: () => ({ bg: 12, rows: [{ d: 10, lux: 1010 }, { d: 20, lux: 262 }] }),
+  getImage: () => '',
+  saveGrade: (e, s) => Object.values(s).reduce((a, b) => a + Number(b), 0),
+  saveQuestions: l => (DEV.qs = l),
+  exportGrades: () => '#',
+};
+const api = (fn, ...args) => new Promise((res, rej) => {
+  if (!window.google?.script?.run) return res(DEV[fn](...args));
+  google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args);
+});
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const toast = msg => { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3000); };
+const TYPE_NAME = { text: '서술형', vars: '변인 선택', graph: '그래프' };
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === b.dataset.tab));
+});
+
+// ---------- 데이터 ----------
+let QS = [], REPORTS = [], cur = null;
+const maxTotal = () => QS.reduce((a, q) => a + q.points, 0);
+async function load() {
+  try {
+    const d = await api('listReports');
+    QS = d.questions; REPORTS = d.reports; $('#sheet').href = d.sheetUrl;
+    renderList(); renderQEdit();
+    if (cur) { const r = REPORTS.find(x => x.email === cur.email); r ? openReport(r) : $('#detail').innerHTML = ''; }
+  } catch (e) { toast('불러오기 실패: ' + e.message); }
+}
+$('#reload').onclick = load;
+$('#export').onclick = async () => {
+  try { const url = await api('exportGrades'); toast('성적 시트를 만들었어요'); window.open(url, '_blank'); }
+  catch (e) { toast('내보내기 실패: ' + e.message); }
+};
+
+// ---------- 제출 목록 ----------
+const graded = r => r.status === '채점완료';
+function filtered() {
+  const c = $('#fcls').value, st = $('#fstat').value;
+  return REPORTS.filter(r => (!c || r.cls == c) && (!st || (st === 'done') === graded(r)))
+    .sort((a, b) => a.cls - b.cls || a.num - b.num);
+}
+function renderList() {
+  const rows = filtered(), done = rows.filter(graded);
+  const avg = done.length ? (done.reduce((a, r) => a + Number(r.total || 0), 0) / done.length).toFixed(1) : '–';
+  $('#summary').textContent = `제출 ${rows.length}명 · 채점완료 ${done.length}명 · 평균 ${avg}/${maxTotal()}점`;
+  $('#list').innerHTML = rows.map(r => `<tr data-email="${esc(r.email)}" class="${cur?.email === r.email ? 'sel' : ''}">
+    <td>${r.cls}</td><td>${r.num}</td><td>${esc(r.name)}</td><td>${r.group}</td><td class="muted">${esc(r.at)}</td>
+    <td><span class="badge s-${esc(r.status)}">${esc(r.status)}</span></td><td>${r.total === '' ? '' : r.total}</td></tr>`).join('')
+    || '<tr><td colspan="7" class="muted">아직 제출이 없어요.</td></tr>';
+  document.querySelectorAll('#list tr[data-email]').forEach(tr => tr.onclick = () => openReport(REPORTS.find(r => r.email === tr.dataset.email)));
+}
+$('#fcls').onchange = $('#fstat').onchange = renderList;
+
+// ---------- 자동 확인 (채점 참고용) ----------
+const RIGHT = { indep: '광원과 센서 사이의 거리', dep: '빛의 밝기(조도)', ctrl: ['LED의 색과 밝기 설정', '주변 밝기 (커튼·형광등)', '센서의 높이와 방향', '켜는 LED의 개수 (1개)'] };
+const mark = ok => ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>';
+function showAnswer(q, a) {
+  if (q.type === 'text') return `<div class="ans">${esc(a) || '<span class="muted">(빈칸)</span>'}</div>`;
+  if (!a) return '<div class="ans muted">(제출 안 함)</div>';
+  if (q.type === 'vars') {
+    const ctrl = (a.ctrl || '').split(', ').filter(Boolean);
+    const hit = ctrl.filter(c => RIGHT.ctrl.includes(c)).length, wrong = ctrl.filter(c => !RIGHT.ctrl.includes(c));
+    return `<div class="ans">독립변인: ${esc(a.indep) || '–'} ${mark(a.indep === RIGHT.indep)}
+종속변인: ${esc(a.dep) || '–'} ${mark(a.dep === RIGHT.dep)}
+통제변인: ${esc(ctrl.join(', ')) || '–'}
+<span class="muted">→ 맞게 고른 것 ${hit}/${RIGHT.ctrl.length}, 잘못 고른 것 ${wrong.length}개${wrong.length ? ' (' + esc(wrong.join(', ')) + ')' : ''}</span></div>`;
+  }
+  if (q.type === 'graph') return `<div class="ans">선택한 x축: <b>${esc(a.xaxis)}</b> ${mark(a.xaxis === '1/d²')} · R² = ${a.r2 != null ? Number(a.r2).toFixed(4) : '–'}
+<span class="muted">R² 비교: ${esc(a.r2table)}</span></div><div data-img></div>`;
+}
+
+// ---------- 학생 상세 · 채점 ----------
+const groupCache = {};
+async function openReport(r) {
+  cur = r;
+  document.querySelectorAll('#list tr').forEach(tr => tr.classList.toggle('sel', tr.dataset.email === r.email));
+  $('#detail').innerHTML = `
+    <h2 style="margin:0">${r.cls}반 ${r.num}번 ${esc(r.name)} <span class="badge s-${esc(r.status)}">${esc(r.status)}</span></h2>
+    <p class="muted">${esc(r.email)} · ${r.group}모둠 · 제출 ${esc(r.at)}${r.status === '재제출' ? ' · ⚠️ 채점 후 다시 제출했어요' : ''}</p>
+    <details><summary>${r.group}모둠 측정 데이터</summary><div id="gdata" class="muted">불러오는 중…</div></details>
+    ${QS.map((q, i) => `<div class="q">
+      <div class="qtext">${i + 1}. [${q.stage}·${TYPE_NAME[q.type]}] ${esc(q.text)}</div>
+      ${showAnswer(q, r.answers[q.id])}
+      <div class="score"><input type="number" min="0" max="${q.points}" step="0.5" data-q="${q.id}" value="${r.scores[q.id] ?? ''}"> / ${q.points}점
+        <button class="btn sub sm" data-full="${q.id}">만점</button><button class="btn sub sm" data-zero="${q.id}">0점</button></div>
+    </div>`).join('')}
+    <p class="qtext" style="margin-top:12px">피드백 (학생에게 전할 말)</p>
+    <textarea id="fb">${esc(r.feedback)}</textarea>
+    <p style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <span class="total" id="tot"></span>
+      <button class="btn" id="gsave">💾 저장</button>
+      <button class="btn sub" id="gnext">저장하고 다음 학생 →</button>
+    </p>`;
+  const inputs = [...document.querySelectorAll('#detail input[data-q]')];
+  const sumUp = () => $('#tot').textContent = `총점 ${inputs.reduce((a, x) => a + (Number(x.value) || 0), 0)} / ${maxTotal()}점`;
+  inputs.forEach(x => x.oninput = sumUp); sumUp();
+  document.querySelectorAll('[data-full],[data-zero]').forEach(b => b.onclick = () => {
+    const id = b.dataset.full || b.dataset.zero, inp = inputs.find(x => x.dataset.q === id);
+    inp.value = b.dataset.full ? QS.find(q => q.id === id).points : 0; sumUp();
+  });
+  $('#gsave').onclick = () => saveGrade(false);
+  $('#gnext').onclick = () => saveGrade(true);
+
+  const key = r.cls + '-' + r.group;
+  (groupCache[key] ??= api('loadGroup', r.cls, r.group)).then(g => {
+    if (cur !== r) return;
+    $('#gdata').innerHTML = !g ? '제출된 모둠 데이터가 없어요.' : `배경 조도 ${g.bg} lx<table><tr><th>d (cm)</th><th>측정 (lx)</th><th>배경 뺀 값</th></tr>${
+      g.rows.map(x => `<tr><td>${x.d}</td><td>${x.lux}</td><td>${(x.lux - g.bg).toFixed(1)}</td></tr>`).join('')}</table>`;
+  }).catch(() => { delete groupCache[key]; });
+  const box = document.querySelector('#detail [data-img]');
+  if (box && r.img) {
+    box.textContent = '그래프 불러오는 중…';
+    api('getImage', r.img).then(src => { if (cur === r) box.innerHTML = src ? `<img class="graph" src="${src}" alt="학생 그래프">` : ''; })
+      .catch(() => box.textContent = '그래프를 불러오지 못했어요.');
+  }
+}
+
+async function saveGrade(next) {
+  const r = cur, scores = {};
+  for (const x of document.querySelectorAll('#detail input[data-q]')) {
+    const q = QS.find(q => q.id === x.dataset.q);
+    if (x.value === '') continue;
+    if (!(Number(x.value) >= 0 && Number(x.value) <= q.points)) return toast(`점수는 0 ~ ${q.points}점 사이로 입력하세요.`);
+    scores[q.id] = Number(x.value);
+  }
+  $('#gsave').disabled = $('#gnext').disabled = true;
+  try {
+    const total = await api('saveGrade', r.email, scores, $('#fb').value);
+    Object.assign(r, { scores, total, feedback: $('#fb').value, status: '채점완료' });
+    toast(`${r.name} 저장 (${total}점)`);
+    const rows = filtered(), i = rows.findIndex(x => x.email === r.email);
+    renderList();
+    if (next) { const n = rows[i + 1]; n ? openReport(n) : toast('마지막 학생이에요.'); }
+    else openReport(r);
+  } catch (e) { toast('저장 실패: ' + e.message); $('#gsave').disabled = $('#gnext').disabled = false; }
+}
+
+// ---------- 문항 · 배점 편집 ----------
+function renderQEdit() {
+  $('#qedit').innerHTML = QS.map((q, i) => `<tr data-i="${i}">
+    <td><button class="btn sub sm" data-up ${i ? '' : 'disabled'}>↑</button><button class="btn sub sm" data-down ${i < QS.length - 1 ? '' : 'disabled'}>↓</button></td>
+    <td><select data-f="stage">${['설계', '분석'].map(s => `<option ${q.stage === s ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
+    <td><select data-f="type">${Object.entries(TYPE_NAME).map(([k, v]) => `<option value="${k}" ${q.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
+    <td><textarea data-f="text">${esc(q.text)}</textarea></td>
+    <td><input type="number" data-f="points" min="0" max="100" step="0.5" value="${q.points}" style="width:70px"></td>
+    <td><input type="checkbox" data-f="required" ${q.required ? 'checked' : ''}></td>
+    <td><button class="btn sub sm" data-del>삭제</button></td></tr>`).join('');
+  $('#qtotal').textContent = `총 배점 ${maxTotal()}점`;
+  document.querySelectorAll('#qedit tr').forEach(tr => {
+    const i = +tr.dataset.i, q = QS[i];
+    tr.querySelectorAll('[data-f]').forEach(el => el.onchange = el.oninput = () => {
+      const f = el.dataset.f;
+      q[f] = f === 'required' ? el.checked : f === 'points' ? Number(el.value) || 0 : el.value;
+      $('#qtotal').textContent = `총 배점 ${maxTotal()}점`;
+    });
+    const move = d => { [QS[i], QS[i + d]] = [QS[i + d], QS[i]]; renderQEdit(); };
+    tr.querySelector('[data-up]').onclick = () => move(-1);
+    tr.querySelector('[data-down]').onclick = () => move(1);
+    tr.querySelector('[data-del]').onclick = () => { QS.splice(i, 1); renderQEdit(); toast('삭제했어요. [저장]을 눌러야 반영돼요.'); };
+  });
+}
+$('#qadd').onclick = () => { QS.push({ id: '', stage: '분석', type: 'text', text: '', points: 1, required: false }); renderQEdit(); };
+$('#qsave').onclick = async () => {
+  $('#qsave').disabled = true;
+  try { QS = await api('saveQuestions', QS); renderQEdit(); renderList(); if (cur) openReport(cur); toast('문항을 저장했어요 ✅'); }
+  catch (e) { toast('저장 실패: ' + e.message); }
+  finally { $('#qsave').disabled = false; }
+};
+
+load();
+</script>
+</body>
+</html>

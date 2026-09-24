@@ -39,6 +39,7 @@
   .axes label { border:1px solid var(--line); border-radius:8px; padding:8px 12px; cursor:pointer; }
   .axes input:checked + span { font-weight:700; color:var(--accent); }
   .chartbox { position:relative; height:360px; }
+  .qhead { font-weight:600; margin:0 0 8px; } .qhead .pts { color:var(--muted); font-weight:400; font-size:14px; } .req { color:#dc2626; }
   .fit { font-size:18px; font-weight:600; margin-top:8px; }
   #toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#1d2433; color:#fff; padding:10px 18px; border-radius:10px; display:none; max-width:90vw; }
 </style>
@@ -49,6 +50,8 @@
   <span class="muted" id="who">로그인 확인 중…</span>
   <select id="cls" style="width:auto"><option value="">반 선택</option><option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option></select>
   <select id="group" style="width:auto"><option value="">모둠 선택</option></select>
+  <input id="num" type="number" min="1" max="40" placeholder="번호" style="width:80px">
+  <input id="sname" type="text" maxlength="20" placeholder="이름" style="width:110px">
 </header>
 
 <main>
@@ -64,21 +67,9 @@
   <div class="card">
     <h2>탐구 질문</h2>
     <p class="big" style="font-size:20px">광원에서 멀어질수록 빛의 밝기(조도)는 어떻게 변할까?</p>
-    <label class="q">가설: 거리와 조도 사이에 어떤 관계가 있을지 예상해서 써 보세요.</label>
-    <textarea data-k="hyp" placeholder="예) 거리가 멀어지면 조도는 ○○할 것이다. 왜냐하면…"></textarea>
   </div>
-  <div class="card">
-    <h2>변인 정하기</h2>
-    <div class="row">
-      <div><label class="q">독립변인 (내가 바꾸는 것)</label><select data-k="indep"></select></div>
-      <div><label class="q">종속변인 (그 결과로 측정하는 것)</label><select data-k="dep"></select></div>
-    </div>
-    <label class="q">통제변인 (똑같이 유지해야 하는 것): 모두 고르세요</label>
-    <div class="checks" id="ctrl"></div>
-    <label class="q">측정 계획: 몇 cm부터 몇 cm까지, 몇 cm 간격으로 잴까요?</label>
-    <input type="text" data-k="plan" placeholder="예) 5cm부터 30cm까지 5cm 간격 (6번)">
-    <p class="tip">💡 너무 가까우면 LED가 한 점처럼 보이지 않고, 너무 멀면 주변 빛에 묻혀요. <b>5~30cm</b> 정도를 추천해요.</p>
-  </div>
+  <div id="qs-설계"></div>
+  <p class="tip">💡 측정 거리 추천: 너무 가까우면 LED가 한 점처럼 보이지 않고, 너무 멀면 주변 빛에 묻혀요. <b>5~30cm</b> 정도가 좋아요.</p>
 </section>
 
 <!-- ② 실험 준비 -->
@@ -135,9 +126,26 @@
 
 <!-- ④ 분석·보고서 -->
 <section id="t4">
+  <div id="qs-분석"></div>
   <div class="card">
-    <h2>그래프의 축은 어떻게 고를까?</h2>
+    <p class="muted">제출하면 답변과 지금 화면의 그래프(선택한 x축)가 함께 제출돼요. 다시 제출하면 새 내용으로 바뀌어요.</p>
+    <button class="btn" id="rsubmit">📨 보고서 제출</button>
+  </div>
+</section>
+
+<!-- 문항 유형별 블록: 문항 설정에 따라 해당 카드 안으로 옮겨짐 -->
+<div id="hold" hidden>
+  <div id="blk-vars">
+    <div class="row">
+      <div><label class="q">독립변인 (내가 바꾸는 것)</label><select id="indep"></select></div>
+      <div><label class="q">종속변인 (그 결과로 측정하는 것)</label><select id="dep"></select></div>
+    </div>
+    <label class="q">통제변인 (똑같이 유지해야 하는 것): 모두 고르세요</label>
+    <div class="checks" id="ctrl"></div>
+  </div>
+  <div id="blk-graph">
     <div class="tip">
+      <b>그래프의 축은 어떻게 고를까?</b><br>
       <b>y축</b>: 실험에서 측정한 결과(종속변인)인 <b>조도(배경 뺀 값)</b><br>
       <b>x축</b>: 내가 바꾼 것(독립변인)인 <b>거리</b>. 그런데 거리 대신 거리로 계산한 값(d², 1/d, 1/d²)을 x축으로 쓸 수도 있어요.<br>
       🎯 <b>목표</b>: 점들이 <b>원점을 지나는 직선</b> 위에 놓이게 하는 x축을 찾아요. 그러면 "y는 x에 비례한다"고 말할 수 있어요.<br>
@@ -150,27 +158,7 @@
     <p class="q">R² 비교표</p>
     <div class="scroll"><table><thead><tr id="r2head"></tr></thead><tbody><tr id="r2row"></tr></tbody></table></div>
   </div>
-  <div class="card">
-    <h2>그래프 해석</h2>
-    <label class="q">Q1. x축을 '거리 d'로 했을 때 그래프는 어떤 모양인가요? 표를 보고, 거리가 2배(10cm → 20cm)가 되면 조도는 약 몇 분의 1이 되는지 계산해 보세요.</label>
-    <textarea data-k="q1"></textarea>
-    <label class="q">Q2. 4가지 x축 중 점들이 원점을 지나는 직선에 가장 가까운 것은 무엇인가요? R² 값을 근거로 쓰세요.</label>
-    <textarea data-k="q2"></textarea>
-    <label class="q">Q3. 그렇다면 조도와 거리 사이의 관계를 한 문장으로 쓰면?</label>
-    <textarea data-k="q3" placeholder="조도는 ○○에 ○○한다."></textarea>
-  </div>
-  <div class="card">
-    <h2>결론 및 평가</h2>
-    <label class="q">결론: 가설과 비교해서 실험 결과로 알게 된 것을 쓰세요.</label>
-    <textarea data-k="conclusion"></textarea>
-    <label class="q">오차 원인: 결과가 완벽한 직선이 아닌 이유는 무엇일까요?</label>
-    <textarea data-k="error" placeholder="예) 주변 빛, 거리 측정, LED가 완전한 점광원이 아님, LED 빛이 앞쪽으로만 나옴…"></textarea>
-    <label class="q">느낀 점</label>
-    <textarea data-k="feel"></textarea>
-    <p class="muted">제출하면 지금 화면의 그래프(선택한 x축)가 함께 제출돼요.</p>
-    <button class="btn" id="rsubmit">📨 보고서 제출</button>
-  </div>
-</section>
+</div>
 </main>
 <div id="toast"></div>
 
@@ -222,7 +210,12 @@ const PASCO = (() => {
 
 // ---------- 서버 호출 (Apps Script) / 로컬 개발용 대체 ----------
 const DEV = {
-  whoami: () => 'dev@local (개발 모드)',
+  getConfig: () => ({ email: 'dev@local (개발 모드)', questions: [
+    { id: 'q1', stage: '설계', type: 'text', text: '가설 (개발 모드 예시 문항)', points: 2, required: true },
+    { id: 'q2', stage: '설계', type: 'vars', text: '변인 정하기', points: 3, required: true },
+    { id: 'q4', stage: '분석', type: 'graph', text: '그래프 그리기', points: 2, required: true },
+    { id: 'q7', stage: '분석', type: 'text', text: 'Q3. 조도와 거리의 관계는?', points: 3, required: false },
+  ] }),
   submitGroup: d => { localStorage.setItem('dev-group-' + d.cls + '-' + d.group, JSON.stringify(d)); return true; },
   loadGroup: (c, g) => JSON.parse(localStorage.getItem('dev-group-' + c + '-' + g) || 'null'),
   submitReport: r => { console.log('[dev] report', r); return '(개발 모드: 저장 안 됨)'; },
@@ -236,7 +229,7 @@ const api = (fn, ...args) => new Promise((res, rej) => {
 const KEY = 'ldexp-v1';
 let S;
 try { S = JSON.parse(localStorage.getItem(KEY)); } catch {}
-S = Object.assign({ cls: '', group: '', a: {}, bg: 0, rows: [], xaxis: 'd', r2s: {}, setup: [] }, S);
+S = Object.assign({ cls: '', group: '', num: '', name: '', ans: {}, vars: {}, bg: 0, rows: [], xaxis: 'd', r2s: {}, setup: [] }, S);
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
 
 const $ = s => document.querySelector(s);
@@ -258,17 +251,46 @@ for (let i = 1; i <= 12; i++) $('#group').add(new Option(i + '모둠', i));
 $('#cls').value = S.cls; $('#group').value = S.group;
 $('#cls').onchange = e => { S.cls = e.target.value; save(); };
 $('#group').onchange = e => { S.group = e.target.value; save(); };
-api('whoami').then(e => $('#who').textContent = e || '⚠️ 학교 계정으로 로그인하세요').catch(() => $('#who').textContent = '⚠️ 로그인 확인 실패');
+$('#num').value = S.num; $('#sname').value = S.name;
+$('#num').oninput = e => { S.num = e.target.value; save(); };
+$('#sname').oninput = e => { S.name = e.target.value; save(); };
 const needClass = () => { if (S.cls && S.group) return false; toast('맨 위에서 반과 모둠을 먼저 선택하세요.'); return true; };
 
-// ---------- ① 설계: 입력칸 자동 저장 ----------
+// ---------- 문항 (교사가 대시보드에서 편집) ----------
+let QS = [];
+const STAGES = ['설계', '분석'];
+function renderQuestions() {
+  STAGES.forEach(st => $('#qs-' + st).replaceChildren());
+  $('#hold').append($('#blk-vars'), $('#blk-graph'));
+  QS.forEach(q => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<p class="qhead">${q.required ? '<span class="req">*</span> ' : ''}${esc(q.text)} <span class="pts">(${q.points}점)</span></p>`;
+    if (q.type === 'text') {
+      const ta = document.createElement('textarea');
+      ta.value = S.ans[q.id] || '';
+      ta.oninput = () => { S.ans[q.id] = ta.value; save(); };
+      card.append(ta);
+    } else card.append($('#blk-' + q.type));
+    $('#qs-' + q.stage)?.append(card);
+  });
+  if (S.tab === 't4') drawChart();
+}
+api('getConfig').then(c => {
+  $('#who').textContent = c.email || '⚠️ 학교 계정으로 로그인하세요';
+  QS = c.questions; renderQuestions();
+}).catch(e => { $('#who').textContent = '⚠️ 불러오기 실패'; toast('문항을 불러오지 못했어요: ' + e.message); });
+
 const VARS = ['광원과 센서 사이의 거리', '빛의 밝기(조도)', 'LED의 밝기 설정', '주변 밝기'];
-document.querySelectorAll('select[data-k]').forEach(sel => { sel.add(new Option('선택하세요', '')); VARS.forEach(v => sel.add(new Option(v))); });
-const CTRLS = ['LED의 색과 밝기 설정', '주변 밝기 (커튼, 형광등)', '센서의 높이와 방향', '켜는 LED의 개수 (1개)', '광원과 센서 사이의 거리', '빛의 밝기(조도)'];
+['indep', 'dep'].forEach(k => {
+  const sel = $('#' + k);
+  sel.add(new Option('선택하세요', '')); VARS.forEach(v => sel.add(new Option(v)));
+  sel.value = S.vars[k] || ''; sel.onchange = () => { S.vars[k] = sel.value; save(); };
+});
+const CTRLS = ['LED의 색과 밝기 설정', '주변 밝기 (커튼·형광등)', '센서의 높이와 방향', '켜는 LED의 개수 (1개)', '광원과 센서 사이의 거리', '빛의 밝기(조도)'];
 $('#ctrl').innerHTML = CTRLS.map(c => `<label><input type="checkbox" value="${c}"> ${c}</label>`).join('');
 const ctrlBoxes = [...document.querySelectorAll('#ctrl input')];
-ctrlBoxes.forEach(b => { b.checked = (S.a.ctrl || '').split(', ').includes(b.value); b.onchange = () => { S.a.ctrl = ctrlBoxes.filter(x => x.checked).map(x => x.value).join(', '); save(); }; });
-document.querySelectorAll('[data-k]').forEach(el => { el.value = S.a[el.dataset.k] || ''; el.oninput = el.onchange = () => { S.a[el.dataset.k] = el.value; save(); }; });
+ctrlBoxes.forEach(b => { b.checked = (S.vars.ctrl || '').split(', ').includes(b.value); b.onchange = () => { S.vars.ctrl = ctrlBoxes.filter(x => x.checked).map(x => x.value).join(', '); save(); }; });
 
 // ---------- ② 준비 ----------
 const SETUP = [
@@ -420,15 +442,22 @@ function renderR2() {
 
 $('#rsubmit').onclick = async () => {
   if (needClass()) return;
-  const need = { hyp: '가설', q2: 'Q2', q3: 'Q3', conclusion: '결론' };
-  const miss = Object.keys(need).filter(k => !(S.a[k] || '').trim()).map(k => need[k]);
-  if (miss.length) return toast('아직 안 쓴 칸: ' + miss.join(', '));
-  if (!chart) return toast('그래프를 먼저 그려 주세요.');
+  if (!(S.num > 0) || !S.name.trim()) return toast('맨 위에 번호와 이름을 입력하세요.');
+  const r2table = Object.keys(AX).map(k => `${AX[k].name}: ${S.r2s[k] != null ? S.r2s[k].toFixed(4) : '-'}`).join(' / ');
+  const answers = {}, miss = [];
+  QS.forEach(q => {
+    if (q.type === 'text') answers[q.id] = S.ans[q.id] || '';
+    if (q.type === 'vars') answers[q.id] = S.vars.indep || S.vars.dep || S.vars.ctrl ? S.vars : null;
+    if (q.type === 'graph') answers[q.id] = chart ? { xaxis: AX[S.xaxis].name, r2: S.r2s[S.xaxis], r2table } : null;
+    const empty = q.type === 'text' ? !answers[q.id].trim() : !answers[q.id];
+    if (q.required && empty) miss.push(`[${q.stage}] ${q.text.slice(0, 15)}…`);
+  });
+  if (miss.length) return toast('아직 안 쓴 필수 문항: ' + miss.join(' / '));
   $('#rsubmit').disabled = true;
   try {
-    const r2table = Object.keys(AX).map(k => `${AX[k].name}: ${S.r2s[k] != null ? S.r2s[k].toFixed(4) : '-'}`).join(' / ');
-    await api('submitReport', { cls: S.cls, group: S.group, answers: S.a, xaxis: AX[S.xaxis].name, r2: S.r2s[S.xaxis], r2table, png: chart.toBase64Image('image/png') });
-    toast('보고서를 제출했어요 🎉 (다시 제출하면 새 제출로 추가돼요)');
+    const png = chart && QS.some(q => q.type === 'graph') ? chart.toBase64Image('image/png') : '';
+    await api('submitReport', { cls: S.cls, group: S.group, num: S.num, name: S.name.trim(), answers, png });
+    toast('보고서를 제출했어요 🎉 (다시 제출하면 새 내용으로 바뀌어요)');
   } catch (e) { toast('제출 실패: ' + e.message); }
   finally { $('#rsubmit').disabled = false; }
 };
