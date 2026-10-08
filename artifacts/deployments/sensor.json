@@ -1,4 +1,10 @@
 {
-  "commit": "9fc32c643ad1cd86b2d671a6e37eaa21e847493c",
-  "sourceHash": "4ad7b9c054596020b4ff87a95d3f4c75ac7b018084e48710ad062d447219b653"
+  "commit": "137845a410bb15c70b50704025ebd7b556158c63",
+  "sourceHash": "fe46a765a3050e623cc8b85d43574ba28540d93acf008931c999f49d70ac0095",
+  "url": "https://soomsci.github.io/ld-exp/",
+  "source": {
+    "branch": "sensor-page",
+    "path": "/"
+  },
+  "status": "building"
 }

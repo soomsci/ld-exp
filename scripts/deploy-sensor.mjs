@@ -7,7 +7,8 @@ const statePath=new URL('artifacts/deployments/sensor.json',root);
 mkdirSync(new URL('artifacts/deployments/',root),{recursive:true});
 const state=existsSync(statePath)?JSON.parse(readFileSync(statePath,'utf8')):{};
 function api(path,method='GET',body){
-  return JSON.parse(execFileSync('gh',['api',path,'--method',method,...(body?['--input','-']:[])],{input:body?JSON.stringify(body):undefined,encoding:'utf8',stdio:['pipe','pipe','pipe']}));
+  const output=execFileSync('gh',['api',path,'--method',method,...(body?['--input','-']:[])],{input:body?JSON.stringify(body):undefined,encoding:'utf8',stdio:['pipe','pipe','pipe']});
+  return output.trim()?JSON.parse(output):null;
 }
 try{
   const sources=[{path:'index.html',content:readFileSync(new URL('index.html',root),'utf8')}, ...['index.html','pasco.js'].map(path=>({path:'sensor/'+path,content:readFileSync(new URL('sensor/'+path,root),'utf8')}))];
