@@ -54,8 +54,8 @@ const PASCO = (() => {
     return dev.name;
   }
 
-  // 1회 측정: 채널0(센서 2030)은 2바이트 원시값 7개(R,G,B,IR,UVA,UVB,UVI) → 조도 = 2 × G
-  // 공식 라이브러리의 기본 변환을 사용하며 공장 보정값은 읽지 않음. 절대 조도 정확도는 별도 비교가 필요함.
+  // 1회 측정: 채널0(센서 2030)은 2바이트 원시값 7개(R,G,B,IR,UVA,UVB,UVI) → 빛의 밝기 = 2 × G
+  // 공식 라이브러리의 기본 변환을 사용하며 공장 보정값은 읽지 않음. 절대 빛의 밝기 정확도는 별도 비교가 필요함.
   function readOnce() {
     return chain = chain.catch(() => {}).then(() => new Promise((res, rej) => {
       if (!send) return rej(new Error('센서가 연결되지 않았어요.'));
