@@ -14,7 +14,7 @@ const HEADERS = {
   '문항': ['id', '순서', '단계', '유형', '발문', '배점', '필수'],
   '문항_v2': ['id', '순서', '단계', '유형', '발문', '배점', '필수'],
   '제출이력': ['보관시각', '기존제출(JSON)'],
-  '모둠데이터': ['시각', '반', '모둠', '제출자', '배경조도', '측정수', '데이터(JSON)'],
+  '모둠데이터': ['시각', '반', '모둠', '제출자', '배경 빛의 밝기', '측정수', '데이터(JSON)'],
   '제출': ['이메일', '반', '번호', '이름', '모둠', '제출시각', '답변(JSON)', '그래프ID', '점수(JSON)', '피드백', '총점', '채점시각', '상태', '형식버전', '문항사본(JSON)', '측정자료사본(JSON)', '자료ID', '제출ID'],
 };
 const C = { email: 0, cls: 1, num: 2, name: 3, group: 4, at: 5, ans: 6, img: 7, scores: 8, fb: 9, total: 10, gradedAt: 11, status: 12 };
@@ -22,10 +22,10 @@ HEADERS['제출이력'] = ['보관시각', ...HEADERS['제출']];
 
 // 남는 문항의 기존 배점만 유지: 8점. Forms 합산 배점은 별도로 확정한다.
 const DEFAULT_QUESTIONS = [
-  ['q1', 1, '설계', 'text', '가설: 거리와 조도 사이에 어떤 관계가 있을지 예상해서 써 보세요.', 2, true],
+  ['q1', 1, '설계', 'text', '가설: 거리와 빛의 밝기 사이에 어떤 관계가 있을지 예상해서 써 보세요.', 2, true],
   ['q2', 2, '설계', 'vars', '변인 정하기: 독립변인, 종속변인, 통제변인을 고르세요.', 3, true],
   ['q3', 3, '설계', 'text', '모둠 측정 계획: 거리 조건과 같은 조건으로 3회 측정할 방법을 써 보세요.', 1, false],
-  ['q4', 4, '그래프', 'graph', '가로축을 바꿔 산점도를 비교하고, 조도와 거리 제곱의 역수 사이의 비례 관계를 분석하세요.', 2, true],
+  ['q4', 4, '그래프', 'graph', '가로축을 바꿔 산점도를 비교하고, 빛의 밝기와 거리 제곱의 역수 사이의 비례 관계를 분석하세요.', 2, true],
 ];
 
 function doGet(e) {
@@ -75,14 +75,14 @@ function validateData_(d, final) {
     throw new Error('서로 다른 양수 거리 5~6개를 정해 주세요.');
   if (!d.distances.some(x => d.distances.some(y => Math.abs(y - 2 * x) < 1e-8)))
     throw new Error('거리가 두 배인 조건을 포함해 주세요.');
-  if (d.bg !== null && (!number(d.bg) || d.bg < 0)) throw new Error('배경 조도를 확인해 주세요.');
+  if (d.bg !== null && (!number(d.bg) || d.bg < 0)) throw new Error('배경 빛의 밝기를 확인해 주세요.');
   if (!Array.isArray(d.rows) || d.rows.length > 18) throw new Error('측정 자료를 확인해 주세요.');
   const keys = new Set();
   const cleanRow = r => {
     if (!r || !number(r.d) || r.d <= 0 || ![1, 2, 3].includes(r.round) ||
         !number(r.lux) || r.lux < 0 || !number(r.bg) || r.bg < 0 ||
         !['manual', 'sensor', 'legacy'].includes(r.mode) || !r.at || !isFinite(Date.parse(r.at)))
-      throw new Error('회차·거리·원래 조도·배경 조도·시각을 확인해 주세요.');
+      throw new Error('회차·거리·원래 빛의 밝기·배경 빛의 밝기·시각을 확인해 주세요.');
     return { d: r.d, round: r.round, lux: r.lux, bg: r.bg, at: str_(r.at, 40), mode: r.mode };
   };
   const rows = d.rows.map(r => {
@@ -152,7 +152,7 @@ function submittedData_(id, cls, group) {
 function graph_(v) {
   const axes = ['distance', 'squared', 'inverseSquared'];
   if (!v || !String(v.title || '').trim() || !axes.includes(v.xaxis) ||
-      v.yaxis !== 'mean') throw new Error('그래프 제목과 가로축을 확인해 주세요. 세로축은 조도로 고정해요.');
+      v.yaxis !== 'mean') throw new Error('그래프 제목과 가로축을 확인해 주세요. 세로축은 빛의 밝기로 고정해요.');
   const a = v.analysis || {};
   if (!axes.concat('unclear').includes(a.linearAxis) || !['yes', 'no', 'unclear'].includes(a.origin) ||
       !String(a.reason || '').trim()) throw new Error('그래프 분석의 축 비교, 원점과의 관계, 근거를 작성해 주세요.');
@@ -310,10 +310,11 @@ function exportGrades() {
 }
 
 // ================= helpers =================
+function brightnessText_(value) { return String(value ?? '').replace(/빛의 밝기\(\uC870\uB3C4\)|\uC870\uB3C4/g, '빛의 밝기'); }
 function readQuestions_(sh) {
   if (sh.getLastRow() < 2) return [];
   return sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues().filter(v => v[0])
-    .map(v => ({ id: String(v[0]), order: Number(v[1]), stage: v[2], type: v[3], text: String(v[4]), points: Number(v[5]) || 0, required: v[6] === true }))
+    .map(v => ({ id: String(v[0]), order: Number(v[1]), stage: v[2], type: v[3], text: brightnessText_(v[4]), points: Number(v[5]) || 0, required: v[6] === true }))
     .sort((a,b) => a.order-b.order);
 }
 function legacyQuestions_() { return readQuestions_(sheet_('문항')); }

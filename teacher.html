@@ -97,7 +97,7 @@
 const DEV = {
   listReports: () => ({ sheetUrl: '#', questions: DEV.qs, history: [], roster: DEV.roster, reports: [
     { email: 's1@school', cls: 2, num: 3, name: '김학생', group: 3, at: '09/24 19:00', status: '제출', total: '', feedback: '', scores: {}, img: '', version:2, questions:DEV.qs, data:DEV.sample(),
-      answers: { q1: '거리가 멀어지면 어두워질 것이다.', q2: { indep: '광원과 센서 사이의 거리', dep: '빛의 밝기(조도)', ctrl: 'LED의 색과 밝기 설정, 주변 밝기 (커튼·형광등), 광원과 센서 사이의 거리' }, q4: {title:'거리와 조도 측정 결과',xaxis:'distance',yaxis:'mean',showTrials:true}, q7: '조도는 거리의 제곱에 반비례한다.' } },
+      answers: { q1: '거리가 멀어지면 어두워질 것이다.', q2: { indep: '광원과 센서 사이의 거리', dep: '빛의 밝기', ctrl: 'LED의 색과 밝기 설정, 주변 밝기 (커튼·형광등), 광원과 센서 사이의 거리' }, q4: {title:'거리와 빛의 밝기 측정 결과',xaxis:'distance',yaxis:'mean',showTrials:true}, q7: '빛의 밝기는 거리의 제곱에 반비례한다.' } },
     { email: 's2@school', cls: 1, num: 7, name: '이학생', group: 1, at: '09/24 19:05', status: '채점완료', total: 5, feedback: '잘했어요', scores: { q1: 2, q7: 3 }, img: '', version:1, questions:[{id:'q1',stage:'설계',type:'text',text:'가설',points:2},{id:'q7',stage:'분석',type:'text',text:'Q3. 관계',points:3}], answers: { q1: '가설', q7: '반비례' } },
   ] }),
   qs: [
@@ -121,6 +121,7 @@ const api = (fn, ...args) => new Promise((res, rej) => {
 });
 
 const $ = s => document.querySelector(s);
+const brightnessText = value => String(value ?? '').replace(/빛의 밝기\(\uC870\uB3C4\)|\uC870\uB3C4/g, '빛의 밝기');
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const toast = msg => { $('#notice').textContent = msg; const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3000); };
 const TYPE_NAME = { text: '서술형', vars: '변인 선택', graph: '그래프' };
@@ -196,12 +197,13 @@ function renderList() {
 $('#fcls').onchange = $('#fstat').onchange = renderList;
 
 // ---------- 자동 확인 (채점 참고용) ----------
-const RIGHT = { indep: '광원과 센서 사이의 거리', dep: '빛의 밝기(조도)', ctrl: ['LED의 색과 밝기 설정', '주변 밝기 (커튼·형광등)', '센서의 높이와 방향', '켜는 LED의 개수 (1개)'] };
+const RIGHT = { indep: '광원과 센서 사이의 거리', dep: '빛의 밝기', ctrl: ['LED의 색과 밝기 설정', '주변 밝기 (커튼·형광등)', '센서의 높이와 방향', '켜는 LED의 개수 (1개)'] };
 const mark = ok => ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>';
 function showAnswer(q, a) {
   if (q.type === 'text') return `<div class="ans">${esc(a) || '<span class="muted">(빈칸)</span>'}</div>`;
   if (!a) return '<div class="ans muted">(제출 안 함)</div>';
   if (q.type === 'vars') {
+    a={...a,indep:brightnessText(a.indep),dep:brightnessText(a.dep),ctrl:brightnessText(a.ctrl)};
     const ctrl = (a.ctrl || '').split(', ').filter(Boolean);
     const hit = ctrl.filter(c => RIGHT.ctrl.includes(c)).length, wrong = ctrl.filter(c => !RIGHT.ctrl.includes(c));
     return `<div class="ans">독립변인: ${esc(a.indep) || '–'} ${mark(a.indep === RIGHT.indep)}
@@ -210,7 +212,7 @@ function showAnswer(q, a) {
 <span class="muted">→ 맞게 고른 것 ${hit}/${RIGHT.ctrl.length}, 잘못 고른 것 ${wrong.length}개${wrong.length ? ' (' + esc(wrong.join(', ')) + ')' : ''}</span></div>`;
   }
   if (q.type === 'graph' && a.title !== undefined) {
-    const labels={distance:'거리 d (cm)',squared:'거리의 제곱 d² (cm²)',inverseSquared:'거리 제곱의 역수 1/d² (cm⁻²)',mean:'평균 조도 (lx)',unclear:'판단하기 어려움'};
+    const labels={distance:'거리 d (cm)',squared:'거리의 제곱 d² (cm²)',inverseSquared:'거리 제곱의 역수 1/d² (cm⁻²)',mean:'평균 빛의 밝기 (lx)',unclear:'판단하기 어려움'};
     const analysis=a.analysis;
     const notes=analysis?Object.entries(analysis.observations||{}).filter(([axis])=>['distance','squared','inverseSquared'].includes(axis)).map(([axis,text])=>`${esc(labels[axis])}: ${esc(text)||'–'}`).join('\n'):'';
     return `<div class="ans">제목: ${esc(a.title)}\n가로축: ${esc(labels[a.xaxis] || a.xaxis)}\n세로축: ${esc(labels[a.yaxis] || a.yaxis)}\n회차별 점: ${a.showTrials?'표시':'숨김'}\n평균점 점선 연결: ${a.connectPoints?'표시':'숨김'}${analysis?`\n\n산점도별 관찰\n${notes}\n\n가장 직선에 가까운 축: ${esc(labels[analysis.linearAxis]||analysis.linearAxis)}\n1/d² 산점도와 원점: ${esc({yes:'원점 가까이를 지나는 직선으로 볼 수 있음',no:'원점에서 벗어나거나 휘어짐',unclear:'판단하기 어려움'}[analysis.origin]||'–')}\n분석 근거: ${esc(analysis.reason)}`:'\n분석 활동 확장 이전 제출 · 당시 그래프 구성 보존'}<br><span class="muted">산점도와 실제 측정 근거를 함께 검토하세요. 예상과 다른 관찰도 그대로 보존해요.</span></div><div data-img></div>`;
@@ -227,7 +229,7 @@ function dataTable(g) {
   const values = d => [1,2,3].map(round=>rows.find(r=>r.d===d&&r.round===round));
   const history = (g.history || []).map(h=>`<p class="muted">${esc(h.at)} · ${esc({remeasure:'재측정',delete:'삭제',distance:'거리 제외',background:'배경 정정'}[h.action])} · ${h.before.round}차 ${h.before.d} cm · 원래 ${h.before.lux} / 배경 ${h.before.bg} lx → ${h.after ? '원래 '+h.after.lux+' / 배경 '+h.after.bg+' lx' : '제외'}</p>`).join('');
   const members=Array.from({length:4},(_,i)=>{const m=(g.members||[])[i];return `<li>모둠원 ${i+1}: ${m&&(m.num||m.name)?esc(m.num)+'번 '+esc(m.name):'미입력'}</li>`;}).join('');
-  return `<h3>모둠원</h3><ul>${members}</ul><p>${legacy ? '이전 자료 · 1회 측정' : '3회 측정 자료'} · 자료 ID ${esc(g.id || '없음')} · 제출 ${esc(g.at || '')}</p><table><tr><th>거리 (cm)</th><th>1차 (lx)</th><th>2차 (lx)</th><th>3차 (lx)</th><th>평균 (lx)</th><th>상태</th></tr>${ds.map(d=>{const rs=values(d),count=rs.filter(Boolean).length;return `<tr><td>${d}</td>${rs.map(r=>`<td>${r?fmt(r.lux-r.bg):'—'}</td>`).join('')}<td>${count===3?fmt(rs.reduce((a,r)=>a+r.lux-r.bg,0)/3):'—'}</td><td>${count}/3회</td></tr>`;}).join('')}</table><p class="muted">표의 값은 배경 조도를 뺀 값이에요.</p><details><summary>원래 값과 적용 배경값 · 변경 이력 ${(g.history || []).length}건</summary><table><tr><th>회차</th><th>거리</th><th>원래 값</th><th>배경값</th><th>시각</th><th>방식</th></tr>${rows.map(r=>`<tr><td>${r.round}</td><td>${r.d}</td><td>${r.lux}</td><td>${r.bg}</td><td>${esc(r.at||'')}</td><td>${esc(r.mode||'legacy')}</td></tr>`).join('')}</table>${history || '<p>변경 이력 없음</p>'}</details>`;
+  return `<h3>모둠원</h3><ul>${members}</ul><p>${legacy ? '이전 자료 · 1회 측정' : '3회 측정 자료'} · 자료 ID ${esc(g.id || '없음')} · 제출 ${esc(g.at || '')}</p><table><tr><th>거리 (cm)</th><th>1차 (lx)</th><th>2차 (lx)</th><th>3차 (lx)</th><th>평균 (lx)</th><th>상태</th></tr>${ds.map(d=>{const rs=values(d),count=rs.filter(Boolean).length;return `<tr><td>${d}</td>${rs.map(r=>`<td>${r?fmt(r.lux-r.bg):'—'}</td>`).join('')}<td>${count===3?fmt(rs.reduce((a,r)=>a+r.lux-r.bg,0)/3):'—'}</td><td>${count}/3회</td></tr>`;}).join('')}</table><p class="muted">표의 값은 배경 빛의 밝기를 뺀 값이에요.</p><details><summary>원래 값과 적용 배경값 · 변경 이력 ${(g.history || []).length}건</summary><table><tr><th>회차</th><th>거리</th><th>원래 값</th><th>배경값</th><th>시각</th><th>방식</th></tr>${rows.map(r=>`<tr><td>${r.round}</td><td>${r.d}</td><td>${r.lux}</td><td>${r.bg}</td><td>${esc(r.at||'')}</td><td>${esc(r.mode||'legacy')}</td></tr>`).join('')}</table>${history || '<p>변경 이력 없음</p>'}</details>`;
 }
 
 // ---------- 학생 상세 · 채점 ----------
@@ -247,7 +249,7 @@ async function openReport(r) {
     <details open><summary>모둠 제출 당시 사용한 자료</summary><div id="snapshot" class="scroll">${r.data ? dataTable(r.data) : '이전 제출에는 당시 자료 사본이 없어요. 최신 모둠 자료와 구분해서 확인하세요.'}</div></details>
     <details><summary>최신 ${r.group}모둠 측정 자료</summary><div id="gdata" class="scroll muted">불러오는 중…</div></details>
     ${reportQS(r).map((q, i) => `<div class="q">
-      <div class="qtext">${i + 1}. [${q.stage}·${TYPE_NAME[q.type]}] ${esc(q.text)}</div>
+      <div class="qtext">${i + 1}. [${q.stage}·${TYPE_NAME[q.type]}] ${esc(brightnessText(q.text))}</div>
       ${showAnswer(q, r.answers[q.id])}
       <div class="score"><input type="number" min="0" max="${q.points}" step="0.5" data-q="${q.id}" value="${r.scores[q.id] ?? ''}"> / ${q.points}점
         <button class="btn sub sm" data-full="${q.id}">만점</button><button class="btn sub sm" data-zero="${q.id}">0점</button></div>
@@ -317,7 +319,7 @@ function renderQEdit() {
     <td><button class="btn sub sm" data-up ${i ? '' : 'disabled'}>↑</button><button class="btn sub sm" data-down ${i < QS.length - 1 ? '' : 'disabled'}>↓</button></td>
     <td><select data-f="stage">${['설계', '그래프'].map(s => `<option ${q.stage === s ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
     <td><select data-f="type">${Object.entries(TYPE_NAME).map(([k, v]) => `<option value="${k}" ${q.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
-    <td><textarea data-f="text">${esc(q.text)}</textarea></td>
+    <td><textarea data-f="text">${esc(brightnessText(q.text))}</textarea></td>
     <td><input type="number" data-f="points" min="0" max="100" step="0.5" value="${q.points}" style="width:70px"></td>
     <td><input type="checkbox" data-f="required" ${q.required ? 'checked' : ''}></td>
     <td><button class="btn sub sm" data-del>삭제</button></td></tr>`).join('');

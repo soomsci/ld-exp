@@ -3,7 +3,7 @@ const html=fs.readFileSync('index.html','utf8');
 const source=html.slice(html.indexOf('function measurementNotice('),html.indexOf('function log(action,'));
 const initial={owner:'student@school',cls:'2',group:'3',num:'5',name:'학생',members:[{num:'1',name:'첫째'},{num:'2',name:'둘째'},{num:'3',name:'셋째'},{num:'4',name:'넷째'}],ans:{q1:'기존 설계'},vars:{indep:'거리'},manual:false,setup:[0,1],
  distances:[5,10,15,20,25,30],rows:[{d:5,round:1,lux:596,bg:566}],history:[{action:'remeasure'}],bg:566,round:3,legacy:false,tab:'t4',
- graph:{title:'조도 그래프',xaxis:'inverseSquared',yaxis:'mean',connectPoints:true,analysis:{observations:{inverseSquared:'기존 메모'},linearAxis:'inverseSquared',origin:'unclear',reason:'기존 근거'}},
+ graph:{title:'빛의 밝기 그래프',xaxis:'inverseSquared',yaxis:'mean',connectPoints:true,analysis:{observations:{inverseSquared:'기존 메모'},linearAxis:'inverseSquared',origin:'unclear',reason:'기존 근거'}},
  groupSig:'group-snapshot',sourceId:'source',sourceAt:'date',reportSig:'report-snapshot',reportAt:'date',reportId:'report'};
 function harness(){
  const store=new Map([['ldexp-v2',JSON.stringify(initial)]]),els={},sets={},clone=x=>JSON.parse(JSON.stringify(x));

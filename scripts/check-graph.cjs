@@ -18,7 +18,7 @@ assert.equal(api.axisValue(20,'distance'),20);assert.equal(api.axisValue(20,'squ
 assert.equal(api.axisNumber(1/900),'0.00111');assert.notEqual(api.axisNumber(1e-9),'0');
 for(const axis of ['distance','squared','inverseSquared']){
  S.graph.xaxis=axis;text.length=arcs.length=dashedPaths.length=0;api.drawChart();assert.equal($('#chart').hidden,false);assert.equal(arcs.filter(a=>a[2]===8).length,6);assert.equal(dashedPaths.length,0);
- assert($('#chart')['aria-label'].includes('세로축 조도'));assert($('#chart')['aria-label'].includes(axis==='squared'?'cm²':axis==='inverseSquared'?'cm⁻²':'cm)'));
+ assert($('#chart')['aria-label'].includes('세로축 빛의 밝기'));assert($('#chart')['aria-label'].includes(axis==='squared'?'cm²':axis==='inverseSquared'?'cm⁻²':'cm)'));
  if(axis==='inverseSquared'){
   const dots=arcs.filter(a=>a[2]===8),slopes=dots.map(a=>(545-a[1])/(a[0]-115));
   slopes.forEach(slope=>assert(Math.abs(slope-slopes[0])<1e-10,'ideal inverse-square samples form a straight line toward the origin'));

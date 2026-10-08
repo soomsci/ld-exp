@@ -18,7 +18,7 @@ function harness(bg=0){
 let h=harness();h.fill(h.S.distances.flatMap(d=>[1,2,3].map(round=>({d,round,value:d===30?0:1000/(d*d)+round}))));h.api.applyManualTable();
 assert.equal(h.S.rows.length,18);assert(h.S.rows.every(r=>r.mode==='manual'&&r.bg===0));assert.equal(h.S.manual,true);assert.equal(h.S.rows.find(r=>r.d===30).lux,0);
 assert.equal(JSON.parse(h.ctx.saved).rows.length,18,'batch entries persist through the normal local save');
-assert(h.$('#manualTable').innerHTML.includes('30cm 3차 원래 조도'));
+assert(h.$('#manualTable').innerHTML.includes('30cm 3차 원래 빛의 밝기'));
 h=harness(5);h.fill([{d:5,round:1,value:0},{d:10,round:1,value:''}]);h.api.applyManualTable();assert.equal(h.S.rows.length,1);assert.equal(h.S.rows[0].lux-h.S.rows[0].bg,-5);
 for(const bad of [-1,'oops',Infinity]){h=harness();h.fill([{d:5,round:1,value:12},{d:10,round:1,value:bad}]);h.api.applyManualTable();assert.equal(h.S.rows.length,0,'validate all cells before changing any records');assert(h.$('#manualStatus').textContent.includes('실패'));}
 h=harness(null);h.fill([{d:5,round:1,value:10}]);h.api.applyManualTable();assert.equal(h.S.rows.length,0);assert(h.$('#manualStatus').textContent.includes('배경'));

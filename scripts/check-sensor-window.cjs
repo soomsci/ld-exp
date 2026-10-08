@@ -20,7 +20,7 @@ async function run(){
   let reading=sensor.readOnce(),message=sent.at(-1).message;
   assert.equal(message.fn,'readOnce');receive({type:'result',id:message.id,lux:0});assert.equal(await reading,0);
   reading=sensor.readAvg(3);message=sent.at(-1).message;assert.equal(message.n,3);assert.equal(message.fn,'readAvg');receive({type:'result',id:message.id,lux:25});assert.equal(await reading,25);
-  reading=sensor.readOnce();message=sent.at(-1).message;receive({type:'result',id:message.id,lux:'999'});await assert.rejects(reading,/조도/);
+  reading=sensor.readOnce();message=sent.at(-1).message;receive({type:'result',id:message.id,lux:'999'});await assert.rejects(reading,/빛의 밝기/);
   reading=sensor.readOnce();receive({type:'disconnected'});await assert.rejects(reading,/끊겼/);assert.equal(sensor.connected,false);assert.equal(disconnected,1);assert.equal(interval,null);
   blockPopup=true;await assert.rejects(sensor.connect(()=>{}),/팝업/);
   allow=true;assert.equal(await sensor.connect(()=>{}),'native');assert.equal(await sensor.readAvg(),13);
