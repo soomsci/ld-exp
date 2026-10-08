@@ -1,24 +1,427 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>빛 실험 · 센서 연결</title><style>
-*{box-sizing:border-box}body{margin:0;background:#f4f6fa;color:#182339;font:17px/1.7 system-ui,sans-serif}main{max-width:600px;margin:36px auto;padding:24px;background:white;border:1px solid #dbe2ed;border-radius:16px}h1{font-size:24px}button{font:inherit;background:#245ad5;color:white;border:0;border-radius:9px;padding:12px 18px;cursor:pointer}button:disabled{opacity:.5}#status{overflow-wrap:anywhere}.muted{color:#526078}#live{font-size:42px;font-weight:700}[hidden]{display:none!important}@media(max-width:650px){main{margin:16px}}
-</style></head><body><main><h1>빛 실험 센서 연결</h1><p>센서 전원을 켜고 아래 버튼을 눌러 <b>Light</b> 센서를 선택하세요. SPARKvue와 연결돼 있다면 먼저 끊어 주세요.</p><button id="connect">센서 선택·연결</button><p id="status" role="status">연결 준비 중…</p><p>현재 조도 <span id="live">—</span> lx</p><p class="muted">연결 후 원래 활동 탭으로 돌아가 측정하세요. 이 연결창은 열어 두세요.</p></main><script src="pasco.js"></script><script>
-const params=new URLSearchParams(location.hash.slice(1)),channel=params.get('channel'),origin=params.get('origin');
-let valid=false,busy=false;
-try{const u=new URL(origin);valid=!!window.opener&&/^[0-9a-f-]{36}$/i.test(channel||'')&&u.protocol==='https:'&&u.hostname.endsWith('-script.googleusercontent.com');}catch(e){}
-const status=document.querySelector('#status'),button=document.querySelector('#connect');
-const send=message=>{if(valid)window.opener.postMessage({channel,...message},origin);};
-if(!valid){status.textContent='활동 홈페이지의 센서 연결 버튼으로 이 창을 열어 주세요.';button.disabled=true;}
-else if(!navigator.bluetooth){status.textContent='이 브라우저는 Web Bluetooth를 지원하지 않아요. 활동 페이지에서 조도 직접 입력을 사용하세요.';button.disabled=true;send({type:'connect-error',error:status.textContent});}
-else status.textContent='센서 선택·연결 버튼을 누르세요.';
-button.onclick=async()=>{button.disabled=true;try{
-  const name=await PASCO.connect(()=>{status.textContent='센서 연결이 끊겼어요. 다시 연결하세요.';send({type:'disconnected'});});
-  status.textContent=name+' 연결 완료 · 원래 활동 탭으로 돌아가세요.';send({type:'connected',name});
-}catch(e){status.textContent='연결 실패: '+e.message;send({type:'connect-error',error:e.message});}finally{button.disabled=false;}};
-window.addEventListener('message',async event=>{
-  const m=event.data;
-  if(!valid||event.source!==window.opener||event.origin!==origin||m?.channel!==channel||m.type!=='request'||!['readOnce','readAvg'].includes(m.fn))return;
-  if(m.fn==='readAvg'&&(!Number.isInteger(m.n)||m.n<1||m.n>20))return send({type:'result',id:m.id,error:'평균 측정 횟수가 올바르지 않아요.'});
-  try{const lux=await PASCO[m.fn](m.n);document.querySelector('#live').textContent=Number(lux.toFixed(2));send({type:'result',id:m.id,lux});}
-  catch(e){send({type:'result',id:m.id,error:e.message});}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>빛의 세기와 거리 탐구</title>
+<style>
+:root{--bg:#f4f6fa;--ink:#182339;--muted:#526078;--line:#dbe2ed;--accent:#245ad5;--tip:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,"Noto Sans KR",sans-serif}header{background:white;border-bottom:1px solid var(--line);padding:18px max(16px,calc((100vw - 1120px)/2));}h1{font-size:22px;margin:0}h2{font-size:20px;margin:0 0 10px}h3{font-size:16px;margin:0 0 8px}p{margin:8px 0 16px}.identity,.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}.identity{margin-top:12px}.identity label{max-width:160px}.identity label input,.identity label select{width:100%}main{max-width:1152px;margin:auto;padding:24px 16px}nav{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:24px}button{font:inherit;cursor:pointer}nav button{border:1px solid var(--line);border-radius:12px;padding:13px 8px;background:white;color:var(--ink);text-align:left}nav small{display:block}nav .on{background:var(--accent);color:white;border-color:var(--accent)}section{display:none}section.on{display:block}.card{border:1px solid var(--line);background:white;padding:22px;border-radius:16px;margin-bottom:18px;min-width:0}.goal{color:var(--muted);margin:0 0 20px}.tip{padding:12px 16px;background:var(--tip);border-radius:10px}.muted{color:var(--muted);font-size:14px}.btn{border:1px solid var(--accent);border-radius:9px;padding:11px 16px;background:var(--accent);color:white;font-weight:600}.btn.sub{background:white;color:var(--accent)}button:disabled{opacity:.5;cursor:not-allowed}label.q{display:block;font-weight:600;margin:12px 0 5px}input,select,textarea{font:inherit;border:1px solid #b8c4d6;border-radius:8px;padding:9px;color:var(--ink);background:white}input[type=text],input[type=number],textarea,select{width:100%}textarea{min-height:90px;resize:vertical}.row>div{flex:1 1 180px}.checks label{display:block;padding:5px 0}.big{font-size:40px;font-weight:750;font-variant-numeric:tabular-nums}.scroll{overflow-x:auto;max-width:100%}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th{background:#f4f6fa;font-size:14px}td button{border:0;background:none;color:var(--accent);border-radius:6px;padding:4px 6px;text-decoration:underline}.measure-grid{display:grid;grid-template-columns:320px 1fr;gap:18px;align-items:start}.rounds{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.rounds button{flex:1;background:white;border:1px solid var(--line);padding:8px;border-radius:8px}.rounds .on{border-color:var(--accent);background:var(--tip);font-weight:700}.status{font-size:14px;padding:8px 0;overflow-wrap:anywhere}.warn{color:#a3450b}.ok{color:#137239}.chartbox{width:100%;overflow:hidden}canvas{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:10px}.count{text-align:right;font-size:13px;color:var(--muted)}:focus-visible{outline:3px solid #c46900;outline-offset:3px}[hidden]{display:none!important}#banner{padding:12px 16px;background:#fff0ec;color:#9b281d}#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);max-width:90vw;background:#182339;color:white;border-radius:10px;padding:12px 18px;z-index:10}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}details{margin-top:10px}summary{cursor:pointer}.req{color:#b42318}.qhead{font-weight:600}.record-detail{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}@media(max-width:800px){.measure-grid{grid-template-columns:1fr}nav{grid-template-columns:repeat(2,1fr)}.card{padding:16px}main{padding-top:16px}}@media(max-width:420px){h1{font-size:19px}.identity label{flex:1 1 40%;max-width:none}.btn{width:100%}}
+</style></head>
+<body>
+<header><h1>빛의 세기와 거리 탐구</h1><span id="who" class="muted">모둠 활동 준비 중…</span>
+<div class="identity"><label>반<select id="cls"><option value="">반 선택</option><option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option></select></label><label>모둠<select id="group"><option value="">모둠 선택</option></select></label></div>
+<div id="localStatus" class="status" role="status"></div><button class="btn sub" id="retryStorage" hidden>임시 저장 재시도</button></header>
+<div id="banner" role="alert" hidden></div>
+<main><nav aria-label="탐구 진행 단계"><button data-tab="t1">① 실험 설계<small>모둠</small></button><button data-tab="t2">② 실험 준비<small>모둠</small></button><button data-tab="t3">③ 반복 측정<small>모둠</small></button><button data-tab="t4">④ 그래프·분석<small>모둠</small></button></nav>
+<section id="t1" aria-label="실험 설계"><p class="goal">무엇을 바꾸고 무엇을 측정할지 정해요.</p><div class="card"><h2>탐구 질문</h2><p>광원에서 멀어질수록 빛의 밝기(조도)는 어떻게 변할까?</p><div class="tip">모둠이 정한 모든 거리에서 한 번씩 측정한 뒤, 같은 거리 조건으로 2차·3차 측정을 진행해요.</div></div><div id="qs-설계"></div><button class="btn" data-next="t2">실험 준비로 이동 →</button></section>
+<section id="t2" aria-label="실험 준비"><p class="goal">장비를 연결하고 같은 측정 조건을 준비해요.</p><div class="card"><h2>모둠원 4명</h2><p>우리 모둠 구성원 4명의 번호와 이름을 적으세요. 설계부터 그래프 분석까지 함께 작성하고 모둠별로 제출해요.</p><div id="members" class="row"></div><p id="memberStatus" class="status" role="status"></p></div>
+<div class="card"><h2>센서와 입력 방식</h2><p>현재 조도 <span class="big" id="live">—</span> lx</p><div class="actions"><button class="btn" id="connect">센서 연결</button><label><input type="checkbox" id="manual"> 수동 입력 모드</label></div><p id="bstat" class="status" role="status">센서 연결 안 됨</p><p class="muted">센서 모드는 약 1초 동안 여러 번 읽은 평균을 한 측정값으로 기록해요. 수동 모드는 스파크뷰 등에서 읽은 값을 직접 입력해요. 1·2·3차 반복 실험은 각각 따로 진행해요.</p><details><summary>연결 도움말</summary>센서 전원을 켜고 스파크뷰 연결을 먼저 끊으세요. 한 센서는 한 기기에만 연결돼요. 연결할 수 없는 환경에서는 수동 모드를 사용하세요.</details></div>
+<div class="card"><h2>설치 체크리스트</h2><div id="setup" class="checks"></div></div>
+<div class="card"><h2>배경 조도</h2><p>LED를 끄고 실험 위치에서 측정해요. 0 lx도 측정값이에요.</p><div class="row"><div><label class="q" for="bg">배경 조도 (lx)</label><input id="bg" type="number" min="0" step="any" placeholder="미측정"></div><button id="bgread" class="btn sub">센서로 배경 측정</button></div><p id="bgStatus" class="status" role="status"></p><p class="muted">다시 측정한 배경 조도는 이후 기록에 적용해요. 기존 기록에는 당시 배경값이 보존돼요. 주변 조명이 달라지면 조건을 바로잡고 필요한 회차를 다시 측정하세요.</p><details><summary>기존 기록의 배경값 정정</summary><p>확인 후 모든 기존 기록에 현재 배경값을 적용하고 변경 이력을 남겨요.</p><button class="btn sub" id="rebackground">기존 기록 배경값 정정</button></details></div>
+<div class="card"><h2>모둠 공통 거리 조건</h2><label class="q" for="distances">거리 목록 (cm, 쉼표로 구분)</label><input id="distances" type="text"><p class="muted">서로 다른 거리 5~6개를 정하고, 거리가 두 배인 조건을 포함해요. 기본 예시: 5, 10, 15, 20, 25, 30 cm. 실제 장비에 맞게 조정하세요.</p><button class="btn sub" id="setDistances">거리 조건 확정</button><p id="distanceStatus" class="status" role="status"></p></div>
+<div class="card"><h2>이미 제출한 모둠 자료가 있나요?</h2><label class="q" for="shareCode">모둠 자료 코드</label><input id="shareCode" type="text" maxlength="12" autocomplete="off" placeholder="다른 기기에서 불러올 때 입력"><p class="muted">측정 자료를 제출하면 코드가 표시돼요. 같은 모둠원에게만 알려 주세요. 이 기기에서 제출한 자료는 코드 없이 불러올 수 있어요.</p><button class="btn sub" id="gload">모둠 활동 불러오기</button><p id="loadStatus" class="status" role="status"></p></div><div class="card"><h2>측정 다시 시작</h2><div class="actions"><button class="btn sub" data-reset-measurements>측정 초기화</button><button class="btn sub" data-restore-measurements hidden>직전 초기화 복원</button></div><p class="muted">측정값·배경값·분석을 초기화하고 1차부터 다시 시작해요. 모둠원·설계 답변·거리 조건·센서 연결은 유지해요. 초기화 전 자료는 이 기기에 백업해요. 서버에 제출한 자료는 유지돼요.</p><p class="status" role="status" data-reset-status></p></div><button class="btn" id="start">1차 측정 시작 →</button></section>
+<section id="t3" aria-label="반복 측정"><p class="goal">같은 거리 목록을 3회 측정하고 기록을 확인해요.</p><div id="rounds" class="rounds" aria-label="측정 회차"></div><p id="legacyStatus" class="status warn" hidden></p>
+<details class="card" id="manualEntry"><summary><b>거리별 1·2·3차 조도 한 번에 직접 입력</b></summary><p>배경을 빼기 전의 조도(lx)를 입력하세요. 배경값은 실험 준비에서 입력하고, 결과표와 그래프에서 자동으로 빼 줘요. 빈칸은 기존 기록을 유지하며, 0도 입력할 수 있어요.</p><div id="manualTable" class="scroll"></div><div class="actions"><button class="btn" id="applyManual">입력값 측정표에 적용</button><button class="btn sub" id="reloadManual">현재 기록 다시 불러오기</button></div><p id="manualStatus" class="status" role="status"></p></details><div class="measure-grid"><div class="card"><h2 id="roundTitle">1차 측정</h2><p><label><input type="checkbox" id="manualMeasure"> 조도 직접 입력</label></p><p id="inputModeHint" class="muted"></p><label class="q" for="din">현재 거리 (cm)</label><select id="din"></select><label class="q" for="luxin">현재 조도 (lx)</label><input id="luxin" type="number" step="any" min="0"><p id="recordHint" class="muted"></p><button id="keep" class="btn">측정값 기록</button><p id="measureStatus" class="status" role="status"></p><button id="nextRound" class="btn sub" hidden></button><details><summary>반복 측정의 목적</summary>반복해서 측정하면 값의 일관성을 확인하고 우연한 흔들림을 줄일 수 있어요. 설치·거리 오차는 반복이나 평균만으로 해결되지 않아요. 예상과 다르다는 이유로 기록을 삭제하지 마세요.</details></div>
+<div class="card"><h2>측정 결과 · 배경 조도를 뺀 값</h2><div id="measureTable" class="scroll"></div><p id="negativeStatus" class="status warn"></p><details><summary>원래 측정값·배경값·변경 이력</summary><div id="rawTable" class="scroll"></div><div id="history" class="scroll"></div></details><div id="recordDetail" class="record-detail" hidden></div><div class="actions"><button class="btn" id="gsubmit">모둠 측정 자료 제출</button><button class="btn sub" id="gdraft">모둠 자료 임시 저장</button></div><p class="muted">모둠에서 한 명이 제출하고 다른 모둠원은 실험 준비에서 불러와요.</p><p id="groupStatus" class="status" role="status"></p><div class="actions"><button class="btn sub" data-reset-measurements>측정 초기화</button><button class="btn sub" data-restore-measurements hidden>직전 초기화 복원</button></div><p class="muted">측정값·배경값·분석을 초기화하고 1차부터 다시 시작해요. 모둠원·설계 답변·거리 조건·센서 연결은 유지해요. 초기화 전 자료는 이 기기에 백업해요. 서버에 제출한 자료는 유지돼요.</p><p class="status" role="status" data-reset-status></p></div></div><button class="btn" data-next="t4">그래프 작성으로 이동 →</button></section>
+<section id="t4" aria-label="그래프 작성과 분석"><p class="goal">같은 자료의 가로축을 바꿔 산점도를 비교하고, 조도와 거리 제곱의 역수 사이의 비례 관계를 살펴봐요.</p><div id="qs-그래프"></div><div class="card"><h2>실험 기록과 그래프 분석 제출</h2><p>제출 당시 사용한 자료, 선택한 그래프와 분석 내용이 함께 보관돼요. 수정한 뒤에는 다시 제출하세요.</p><button class="btn" id="rsubmit" disabled>모둠 실험 기록·그래프 분석 제출</button><p id="reportStatus" class="status" role="status"></p><p id="formsHint">추가 모둠 퀴즈는 교사가 제공하는 경우에 진행하세요.</p><a id="forms" target="_blank" rel="noopener noreferrer" hidden>추가 모둠 퀴즈 열기 ↗</a></div></section>
+<div id="hold" hidden><div id="blk-vars"><div class="row"><div><label class="q" for="indep">독립변인 (바꾸는 것)</label><select id="indep"></select></div><div><label class="q" for="dep">종속변인 (측정하는 것)</label><select id="dep"></select></div></div><p class="qhead">통제변인 (같게 유지할 것)</p><div id="ctrl" class="checks"></div></div>
+<div id="blk-graph"><label class="q" for="graphTitle">그래프 제목</label><input id="graphTitle" type="text" maxlength="120"><div class="row"><div><label class="q" for="xaxis">가로축</label><select id="xaxis"></select></div><div><label class="q" for="yaxis">세로축 (고정)</label><input id="yaxis" type="text" value="조도 (lx, 배경을 뺀 3회 평균)" readonly></div></div><p class="tip">거리 d → 거리의 제곱 d² → 거리 제곱의 역수 1/d² 순서로 바꿔 보세요. 세로축의 조도와 측정 자료는 같아요.</p><p><label><input type="checkbox" id="showTrials"> 각 회차의 측정값 보기</label></p><p><label><input type="checkbox" id="connectPoints"> 평균점 점선 연결</label></p><p class="muted">가로축 값 순서로 평균점 사이만 이어 모양을 살펴봐요. 점 연결선은 측정한 점 사이의 보조 표시예요.</p><button id="draw" class="btn">산점도 그리기</button><p id="graphStatus" class="status" role="status"></p><div class="chartbox"><canvas id="chart" width="1000" height="650" role="img" aria-label="작성한 산점도" hidden></canvas></div><p id="axisGuide" class="muted"></p><label class="q" for="axisObservation" id="axisObservationLabel">이 산점도에서 관찰한 점 (선택)</label><textarea id="axisObservation" maxlength="500" placeholder="점들이 휘어지는지, 직선에 가까운지 기록해 보세요."></textarea><p class="muted">가로축별 메모를 따로 저장해요. 축을 바꾸면 그 축의 메모가 나타나요.</p><div class="actions"><button class="btn sub" id="png" disabled>그래프 이미지 저장</button><button class="btn sub" id="dataCsv">측정표 CSV 저장</button></div><details open><summary>가로축 변환값과 같은 자료의 결과표</summary><div id="graphTable" class="scroll"></div></details><div class="record-detail"><h3>세 산점도를 비교해 분석하기</h3><div class="row"><div><label class="q" for="linearAxis">점들이 가장 직선에 가깝게 놓이는 가로축은?</label><select id="linearAxis"><option value="">선택하세요</option><option value="distance">거리 d</option><option value="squared">거리의 제곱 d²</option><option value="inverseSquared">거리 제곱의 역수 1/d²</option><option value="unclear">판단하기 어려움</option></select></div><div><label class="q" for="originCheck">1/d² 산점도는 원점 가까이를 지나는 직선으로 볼 수 있나요?</label><select id="originCheck"><option value="">선택하세요</option><option value="yes">그렇게 볼 수 있어요</option><option value="no">원점에서 벗어나거나 휘어져요</option><option value="unclear">판단하기 어려워요</option></select></div></div><p class="tip">조도 I와 1/d²의 점들이 원점 가까이를 지나는 직선에 놓인다면 I ∝ 1/d²로 볼 수 있어요. 이는 조도가 거리의 제곱에 반비례한다는 뜻이에요. 원점은 실제 측정한 점이 아니에요. 점들의 배열을 보며 조심스럽게 판단하세요.</p><label class="q" for="analysisReason">우리 모둠 자료는 이 관계를 뒷받침하나요? 그래프에서 본 근거를 적으세요.</label><textarea id="analysisReason" maxlength="1500" placeholder="1/d² 산점도의 점 배열과 원점 부근의 방향을 근거로 설명해 보세요. 예상과 다른 점도 그대로 기록하세요."></textarea><p class="muted">실제 자료가 예상과 다르면 그렇게 답해도 돼요. 직선처럼 보이는 것만으로 비례를 확정하지 말고 원점과의 관계도 살펴보세요.</p></div></div></div>
+</main><div id="toast" role="status" hidden></div>
+<script>
+const PASCO_NATIVE = (() => {
+  const uuid = (s, c) => `4a5c000${s}-000${c}-0000-0000-5c1e741f1c00`;
+  let dev, send, waiter, chain = Promise.resolve();
+  const diagnostics = [];
+  function debug(msg) {
+    if (!new URLSearchParams(location.search).has('sensor-test')) return;
+    diagnostics.push(new Date().toISOString() + ' ' + msg);
+    if (diagnostics.length > 40) diagnostics.shift();
+    let box = document.getElementById('sensorLog');
+    if (!box) {
+      const details = document.createElement('details');
+      details.open = true;
+      const summary = document.createElement('summary');
+      summary.textContent = '센서 연결 진단 (실물 검사)';
+      box = document.createElement('pre'); box.id = 'sensorLog';
+      box.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px';
+      details.append(summary, box);
+      document.getElementById('bstat').after(details);
+    }
+    box.replaceChildren(...diagnostics.map(line => {
+      const entry = document.createElement('div'); entry.textContent = line; return entry;
+    }));
+  }
+
+  async function connect(onDisconnect) {
+    if (dev?.gatt.connected) dev.gatt.disconnect();
+    dev = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'Light' }],
+      optionalServices: [0, 1, 2].map(s => uuid(s, 0)),
+    });
+    debug('device ' + dev.name);
+    dev.addEventListener('gattserverdisconnected', () => { send = null; onDisconnect(); });
+    const server = await dev.gatt.connect();
+    const svc = await server.getPrimaryService(uuid(1, 0));
+    // Subscribe to all accessible PASCO services. The real PS-3213 tested on
+    // 2026-10-07 returns channel 1 measurement responses on interface service 0.
+    for (const service of await server.getPrimaryServices()) {
+      debug('service ' + service.uuid);
+      for (const ch of await service.getCharacteristics()) {
+        debug('characteristic ' + ch.uuid + ' notify=' + ch.properties.notify + ' write=' + ch.properties.write + ' writeWithoutResponse=' + ch.properties.writeWithoutResponse);
+        if (!ch.properties.notify) continue;
+        ch.addEventListener('characteristicvaluechanged', e => {
+          const v = new Uint8Array(e.target.value.buffer, e.target.value.byteOffset, e.target.value.byteLength);
+          debug('receive ' + ch.uuid + ' [' + Array.from(v, x => x.toString(16).padStart(2, '0')).join(' ') + ']');
+          if (v.length >= 3 && v[0] === 0xC0 && v[2] === 0x05 && waiter) {
+            if (v[1] !== 0) waiter(null, new Error('센서가 측정 요청을 거부했어요 (응답 코드 ' + v[1] + ').'));
+            else if (v.length >= 17) waiter(v.slice(3));
+          }
+        });
+        await ch.startNotifications();
+      }
+    }
+    send = await svc.getCharacteristic(uuid(1, 2));
+    return dev.name;
+  }
+
+  // 1회 측정: 채널0(센서 2030)은 2바이트 원시값 7개(R,G,B,IR,UVA,UVB,UVI) → 조도 = 2 × G
+  // 공식 라이브러리의 기본 변환을 사용하며 공장 보정값은 읽지 않음. 절대 조도 정확도는 별도 비교가 필요함.
+  function readOnce() {
+    return chain = chain.catch(() => {}).then(() => new Promise((res, rej) => {
+      if (!send) return rej(new Error('센서가 연결되지 않았어요.'));
+      const t = setTimeout(() => { waiter = null; rej(new Error('센서 응답이 없어요.')); }, 2000);
+      waiter = (p, error) => { clearTimeout(t); waiter = null; if (error) rej(error); else res(2 * (p[2] | p[3] << 8)); };
+      debug('send [05 0e]');
+      const command = new Uint8Array([0x05, 14]);
+      const writing = send.properties.writeWithoutResponse
+        ? send.writeValueWithoutResponse(command)
+        : send.writeValueWithResponse(command);
+      writing.then(() => debug('command sent')).catch(e => { clearTimeout(t); waiter = null; rej(e); });
+    }));
+  }
+
+  async function readAvg(n = 5) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) { sum += await readOnce(); await new Promise(r => setTimeout(r, 200)); }
+    return sum / n;
+  }
+
+  return { connect, readOnce, readAvg, get connected() { return !!send; } };
+})();
+
+
+const PASCO = (() => {
+  const host='https://soomsci.github.io',url=host+'/ld-exp/sensor/';
+  let external=false,popup,channel,connected=false,disconnect,connectWait,listener,watch,serial=0;
+  const pending=new Map();
+  function needsExternal(){try{const policy=typeof document==='undefined'?null:(document.permissionsPolicy||document.featurePolicy);return !!policy?.allowsFeature&&!policy.allowsFeature('bluetooth');}catch(e){return false;}}
+  function stop(message){
+    const wasConnected=connected;connected=false;
+    if(connectWait){clearTimeout(connectWait.timer);connectWait.reject(new Error(message));connectWait=null;}
+    pending.forEach(p=>{clearTimeout(p.timer);p.reject(new Error(message));});pending.clear();
+    if(listener)window.removeEventListener('message',listener);listener=null;
+    if(watch)window.clearInterval(watch);watch=null;
+    if(popup&&!popup.closed)popup.close();popup=null;
+    if(wasConnected&&disconnect)disconnect();
+  }
+  function connectExternal(onDisconnect){
+    stop('새 센서 연결을 시작했어요.');disconnect=onDisconnect;channel=crypto.randomUUID();
+    return new Promise((resolve,reject)=>{
+      connectWait={resolve,reject,timer:setTimeout(()=>stop('센서 연결 시간이 지났어요. 센서 연결을 다시 누르세요.'),120000)};
+      listener=event=>{
+        const m=event.data;
+        if(event.origin!==host||event.source!==popup||m?.channel!==channel)return;
+        if(m.type==='connected'){
+          connected=true;
+          if(connectWait){clearTimeout(connectWait.timer);connectWait.resolve(String(m.name||'Light 센서'));connectWait=null;}
+        }else if(m.type==='disconnected'||m.type==='connect-error')stop(String(m.error||'센서 연결창이 닫혔거나 연결이 끊겼어요.'));
+        else if(m.type==='result'){
+          const p=pending.get(m.id);if(!p)return;pending.delete(m.id);clearTimeout(p.timer);
+          if(m.error)p.reject(new Error(String(m.error)));
+          else if(typeof m.lux!=='number'||!Number.isFinite(m.lux)||m.lux<0)p.reject(new Error('센서 응답 조도를 확인하세요.'));
+          else p.resolve(m.lux);
+        }
+      };
+      window.addEventListener('message',listener);
+      popup=window.open(url+'#'+new URLSearchParams({channel,origin:location.origin}),'ldexp-sensor-'+channel,'popup,width=620,height=700');
+      if(!popup){stop('센서 연결창을 열 수 없어요. 이 페이지의 팝업을 허용한 뒤 센서 연결을 다시 누르세요.');return;}
+      watch=window.setInterval(()=>{if(popup?.closed)stop('센서 연결창이 닫혔어요. 다시 연결하세요.');},500);
+    });
+  }
+  function request(fn,n=5){
+    if(!connected||!popup||popup.closed)return Promise.reject(new Error('센서 연결창에서 센서를 먼저 연결하세요.'));
+    return new Promise((resolve,reject)=>{
+      const id=String(++serial),timer=setTimeout(()=>{pending.delete(id);reject(new Error('센서 응답 시간이 지났어요. 연결창을 확인하세요.'));},Math.max(10000,n*2500));
+      pending.set(id,{resolve,reject,timer});popup.postMessage({type:'request',channel,id,fn,n},host);
+    });
+  }
+  return {
+    get needsExternal(){return needsExternal();},
+    connect(onDisconnect){
+      external=needsExternal();
+      if(external)return connectExternal(onDisconnect);
+      if(!navigator.bluetooth)return Promise.reject(new Error('이 브라우저는 Web Bluetooth를 지원하지 않아요. 조도 직접 입력을 사용하세요.'));
+      return PASCO_NATIVE.connect(onDisconnect);
+    },
+    readOnce:()=>external?request('readOnce'):PASCO_NATIVE.readOnce(),
+    readAvg:(n=5)=>external?request('readAvg',n):PASCO_NATIVE.readAvg(n),
+    get connected(){return external?connected&&!!popup&&!popup.closed:PASCO_NATIVE.connected;},
+  };
+})();
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = n => typeof n !== 'number' || !Number.isFinite(n) ? '—' : Number(n.toFixed(2)).toString();
+const clone = x => JSON.parse(JSON.stringify(x));
+const now = () => new Date().toISOString();
+const toast = msg => { $('#toast').textContent = msg; $('#toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => $('#toast').hidden = true, 3500); };
+const status = (id,msg,warn=false) => { $(id).textContent = msg; $(id).classList.toggle('warn',warn); };
+const DEFAULT_QS = [
+{id:'q1',stage:'설계',type:'text',text:'가설: 거리와 조도 사이에 어떤 관계가 있을지 예상해서 써 보세요.',points:2,required:true},
+{id:'q2',stage:'설계',type:'vars',text:'변인 정하기: 독립변인, 종속변인, 통제변인을 고르세요.',points:3,required:true},
+{id:'q3',stage:'설계',type:'text',text:'모둠 측정 계획: 거리 조건과 같은 조건으로 3회 측정할 방법을 써 보세요.',points:1,required:false},
+{id:'q4',stage:'그래프',type:'graph',text:'가로축을 바꿔 산점도를 비교하고, 조도와 거리 제곱의 역수 사이의 비례 관계를 분석하세요.',points:2,required:true}];
+const DEV = {
+getConfig: () => ({email:'dev@local',profile:null,questions:DEFAULT_QS,maxAnswer:1500,version:2,formsUrl:''}),
+submitGroup: d => { const g = {...clone(d),id:crypto.randomUUID(),by:'dev@local',at:now(),status:d.status === 'draft' ? 'draft' : 'submitted'}; localStorage.setItem('dev-group-' + d.cls + '-' + d.group + (d.status === 'draft' ? '-draft' : ''),JSON.stringify(g)); return g; },
+loadGroup: (c,g) => JSON.parse(localStorage.getItem('dev-group-' + c + '-' + g) || 'null'),
+submitReport: r => { const result = {id:crypto.randomUUID(),at:now()}; localStorage.setItem('dev-report',JSON.stringify({...r,...result})); return result; }
+};
+const RemoteStudentAPI = (()=>{
+  const endpoint='https://script.google.com/macros/s/AKfycbzeVJ33bBWE31wx1ZTUMUmxB6VyMRNqMvClEuUTA7h4rRuT57ImzxP7CbkHyEGSQnXZog/exec';
+  let connection;
+  function connect(){
+    if(connection)return connection;
+    connection=new Promise((resolve,reject)=>{
+      const channel=crypto.randomUUID(),frame=document.createElement('iframe'),pending=new Map();
+      let source,origin;
+      frame.hidden=true;frame.title='모둠 제출 연결';frame.referrerPolicy='no-referrer';
+      const fail=message=>{window.removeEventListener('message',listener);frame.remove();connection=null;pending.forEach(p=>{clearTimeout(p.timer);p.reject(new Error(message));});pending.clear();reject(new Error(message));};
+      const timer=setTimeout(()=>fail('서버 연결에 실패했어요. 잠시 후 다시 불러오세요.'),30000);
+      const listener=event=>{
+        const m=event.data;
+        if(m?.channel!==channel||!/^https:\/\/n-[a-z0-9-]+-script\.googleusercontent\.com$/.test(event.origin))return;
+        if(m.type==='ldexp-ready'&&!source){
+          source=event.source;origin=event.origin;clearTimeout(timer);
+          resolve({request:(fn,args)=>new Promise((res,rej)=>{
+            const id=crypto.randomUUID(),t=setTimeout(()=>{pending.delete(id);rej(new Error('저장 응답 시간이 지났어요. 교사 화면이나 모둠 불러오기로 저장 여부를 확인한 뒤 다시 시도하세요.'));},60000);
+            pending.set(id,{resolve:res,reject:rej,timer:t});source.postMessage({type:'ldexp-request',channel,id,fn,args},origin);
+          })});
+        }else if(m.type==='ldexp-response'&&event.source===source&&event.origin===origin){
+          const p=pending.get(m.id);if(!p)return;pending.delete(m.id);clearTimeout(p.timer);
+          m.error?p.reject(new Error(String(m.error))):p.resolve(m.value);
+        }
+      };
+      window.addEventListener('message',listener);
+      frame.onerror=()=>{clearTimeout(timer);fail('서버 연결 페이지를 열 수 없어요. 인터넷 연결을 확인하세요.');};
+      frame.src=endpoint+'?page=relay&channel='+encodeURIComponent(channel);document.body.append(frame);
+    });
+    return connection;
+  }
+  return {request:async(fn,args)=>(await connect()).request(fn,args)};
+})();
+const localDevelopment=['localhost','127.0.0.1',''].includes(location.hostname);
+let studentToken = '';
+try { studentToken = localStorage.getItem('ldexp-student-token') || ''; } catch(e) {}
+const api = (fn,...args) => new Promise((res,rej) => { try { if (window.google?.script?.run) return google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args,studentToken); if(localDevelopment)return res(DEV[fn](...args)); if(location.hostname==='soomsci.github.io')return RemoteStudentAPI.request(fn,[...args,studentToken]).then(res,rej); throw new Error('학생용 공식 주소로 접속해 주세요.'); } catch(e) { rej(e); } });
+const KEY = 'ldexp-v2';
+function fresh() { return {version:2,cls:'',group:'',num:'',name:'',manual:true,members:Array.from({length:4},()=>({num:'',name:''})),ans:{},vars:{},bg:null,distances:[5,10,15,20,25,30],rows:[],history:[],round:1,setup:[],tab:'t1',graph:{title:'',xaxis:'',yaxis:'',showTrials:false,connectPoints:false}}; }
+let S = fresh(), storageError = '';
+try { const current = JSON.parse(localStorage.getItem(KEY)); if (current) S = {...S,...current}; else { const old = JSON.parse(localStorage.getItem('ldexp-v1')); if(old) { S = {...S,cls:old.cls,group:old.group,num:old.num,name:old.name,owner:old.owner,ans:old.ans || {},vars:old.vars || {},manual:old.manual,setup:old.setup || []}; if(old.rows?.length) { S.bg = Number(old.bg) || 0; S.rows = old.rows.map(r => ({...r,round:1,bg:S.bg,mode:'legacy',at:now()})); S.distances = [...new Set(old.rows.map(r => r.d))].sort((a,b)=>a-b); S.legacy = true; } } } } catch(e) { storageError = '이 기기의 임시 저장 자료를 읽지 못했어요. ' + e.message; }
+let QS = [], ready = false, maxAnswer = 1500, measuring = false, submittingReport = false, drawn = '', groupError = '', reportError = '';
+const timeLabel = s => s && Number.isFinite(Date.parse(s)) ? new Date(s).toLocaleString('ko-KR') : (s || '');
+$('#retryStorage').onclick = () => save();
+const data = () => ({version:2,distances:S.distances,bg:S.bg,rows:S.rows,history:S.history,members:memberData()});
+const dataSig = () => JSON.stringify(data());
+const graphSig = () => JSON.stringify({data:{distances:S.distances,bg:S.bg,rows:S.rows,history:S.history},graph:{title:S.graph.title,xaxis:S.graph.xaxis,yaxis:S.graph.yaxis,showTrials:S.graph.showTrials,connectPoints:!!S.graph.connectPoints}});
+const reportSig = () => JSON.stringify({cls:S.cls,group:S.group,num:S.num,name:S.name,ans:S.ans,vars:S.vars,graph:S.graph,data:data()});
+function save() { try { localStorage.setItem(KEY,JSON.stringify(S)); storageError = ''; } catch(e) { storageError = '임시 저장 실패: ' + e.message + ' · 저장 공간을 확인하고 다시 시도하세요.'; } renderStatus(); }
+function renderStatus() {
+$('#retryStorage').hidden = !storageError;
+status('#localStatus',storageError || '✓ 이 기기에 임시 저장 · 모둠 제출은 별도 버튼을 눌러요',!!storageError);
+status('#groupStatus', groupError || (S.groupSig === dataSig() ? '✓ 모둠 자료 제출 완료 · ' + timeLabel(S.sourceAt) + (S.shareCode ? ' · 모둠 자료 코드: ' + S.shareCode : '') : S.groupSig ? '측정 자료가 수정됐어요. 모둠 자료를 다시 제출하세요.' : '모둠 자료 미제출'), !!groupError);
+status('#reportStatus',reportError || (S.reportSig === reportSig() ? '✓ 모둠 기록 제출 완료 · ' + timeLabel(S.reportAt) : S.reportSig ? '기록이 수정됐어요. 모둠 기록을 다시 제출하세요.' : '모둠 기록 미제출'), !!reportError);
+$('#rsubmit').disabled = !ready || measuring || submittingReport;
+updateMeasurementBackupControls();
+if (drawn && drawn !== graphSig()) { status('#graphStatus','제목·축·자료가 바뀌었어요. 그래프를 다시 그려 주세요.',true); $('#chart').hidden = true; $('#png').disabled = true; }
+}
+function showTab(id) { if(!['t1','t2','t3','t4'].includes(id)) id='t1'; document.querySelectorAll('nav button').forEach(b => { b.classList.toggle('on',b.dataset.tab === id); b.setAttribute('aria-current',b.dataset.tab === id ? 'step' : 'false'); }); document.querySelectorAll('section').forEach(el=>el.classList.toggle('on',el.id===id)); S.tab=id; save(); }
+document.querySelectorAll('nav button,[data-next]').forEach(b=>b.onclick=()=>showTab(b.dataset.tab || b.dataset.next));
+for(let i=1;i<=12;i++) $('#group').add(new Option(i+'모둠',i));
+function identity() { $('#cls').value=S.cls; $('#group').value=S.group; }
+identity();
+['cls','group'].forEach(k => $('#'+k).onchange = e => { if(S.rows.length && !confirm('반·모둠을 바꾸면 현재 측정 자료는 이 기기에 별도 보관하고 새 모둠으로 시작해요. 계속할까요?')) {identity();return;} if(S.rows.length) { try{localStorage.setItem(KEY+'-backup-'+Date.now(),JSON.stringify(S));}catch(err){identity();return status('#localStatus','자료 보관 실패: '+err.message,true);} Object.assign(S,{rows:[],history:[],bg:null,distances:[5,10,15,20,25,30],legacy:false}); $('#bg').value=''; } S[k]=e.target.value; S.shareCode='';$('#shareCode').value=''; S.members=Array.from({length:4},()=>({num:'',name:''}));syncMembers();delete S.groupSig; delete S.sourceId; save(); renderData(); });
+
+function memberData(){return Array.from({length:4},(_,i)=>{const m=S.members?.[i]||{},n=String(m.num??'').trim();return{num:n===''?'':String(Number(n)),name:String(m.name||'').trim()};});}
+function syncMembers(){S.members=memberData();document.querySelectorAll('#members input').forEach(el=>el.value=S.members[Number(el.dataset.member)][el.dataset.field]);}
+function validateMembers(final){const list=memberData(),seen=new Set();list.forEach((m,i)=>{
+  if(m.num!==''&&(!Number.isInteger(Number(m.num))||Number(m.num)<1||Number(m.num)>40))throw new Error('모둠원 '+(i+1)+'의 번호는 1~40 사이 정수로 입력하세요.');
+  if(m.name.length>20)throw new Error('모둠원 '+(i+1)+'의 이름은 20자 이내로 입력하세요.');
+  if(final&&!!m.num!==!!m.name)throw new Error('모둠원 '+(i+1)+'의 번호와 이름을 함께 입력하세요.');
+  if(m.num&&seen.has(m.num))throw new Error('모둠원 번호가 중복됐어요.');if(m.num)seen.add(m.num);
+});return list;}
+$('#members').innerHTML=Array.from({length:4},(_,i)=>`<div><h3>모둠원 ${i+1}</h3><label class="q" for="memberNum${i}">모둠원 ${i+1} 번호</label><input id="memberNum${i}" data-member="${i}" data-field="num" type="number" min="1" max="40"><label class="q" for="memberName${i}">모둠원 ${i+1} 이름</label><input id="memberName${i}" data-member="${i}" data-field="name" type="text" maxlength="20"></div>`).join('');
+syncMembers();document.querySelectorAll('#members input').forEach(el=>el.oninput=()=>{S.members[Number(el.dataset.member)][el.dataset.field]=el.value;try{validateMembers(false);status('#memberStatus','');}catch(e){status('#memberStatus',e.message,true);}save();});
+function requireIdentity() { if(!ready) throw new Error('모둠 활동 준비를 마친 후 다시 시도하세요.'); if(!S.cls || !S.group) throw new Error('반과 모둠을 선택하세요.'); }
+const VARS = ['광원과 센서 사이의 거리','빛의 밝기(조도)','LED의 밝기 설정','주변 밝기'];
+['indep','dep'].forEach(k=>{ const el=$('#'+k); el.add(new Option('선택하세요','')); VARS.forEach(v=>el.add(new Option(v,v))); el.value=S.vars[k]||''; el.onchange=()=>{S.vars[k]=el.value;save();}; });
+const CTRLS=['LED의 색과 밝기 설정','주변 밝기 (커튼·형광등)','센서의 높이와 방향','켜는 LED의 개수 (1개)','광원과 센서 사이의 거리','빛의 밝기(조도)'];
+$('#ctrl').innerHTML=CTRLS.map(c=>`<label><input type="checkbox" value="${esc(c)}" ${(S.vars.ctrl||'').split(', ').includes(c)?'checked':''}> ${esc(c)}</label>`).join('');
+document.querySelectorAll('#ctrl input').forEach(b=>b.onchange=()=>{S.vars.ctrl=[...document.querySelectorAll('#ctrl input:checked')].map(x=>x.value).join(', ');save();});
+function renderQuestions() {
+$('#hold').append($('#blk-vars'),$('#blk-graph')); ['설계','그래프'].forEach(st=>$('#qs-'+st).replaceChildren());
+QS.forEach(q=>{const card=document.createElement('div');card.className='card';card.innerHTML=`<p class="qhead" id="label-${q.id}">${q.required?'<span class="req">* </span>':''}${esc(q.text)}</p>`; if(q.type==='text'){const ta=document.createElement('textarea'),count=document.createElement('div');ta.id='answer-'+q.id;ta.setAttribute('aria-labelledby','label-'+q.id);ta.maxLength=maxAnswer;ta.value=(S.ans[q.id]||'').slice(0,maxAnswer); count.className='count';const update=()=>count.textContent=ta.value.length+' / '+maxAnswer+'자';ta.oninput=()=>{S.ans[q.id]=ta.value;update();save();};update();card.append(ta,count);}else{card.append($('#blk-'+q.type));} $('#qs-'+q.stage).append(card);}); }
+async function config() { try { const c=await api('getConfig'); if(c.studentToken){studentToken=c.studentToken;try{localStorage.setItem('ldexp-student-token',studentToken);}catch(e){storageError='이 기기에 접속 정보를 저장하지 못했어요. 브라우저를 닫기 전에 제출하거나 파일을 저장하세요.';}} if(S.owner && S.owner!==c.email){localStorage.setItem(KEY+'-owner-backup-'+Date.now(),JSON.stringify(S)); S=fresh(); identity();} S.owner=c.email; $('#who').textContent=(c.studentToken?'로그인 없이 모둠활동 · 반과 모둠을 선택하세요':c.email)+(localDevelopment?' · 로컬 개발 모드 (서버 제출 아님)':''); if(c.error)throw new Error(c.error); if(c.profile){const p=c.profile;Object.assign(S,{cls:String(p.cls),num:String(p.num),name:p.name},p.group?{group:String(p.group)}:{});identity();$('#cls').disabled=true;$('#group').disabled=!!p.group;} maxAnswer=c.maxAnswer||1500; QS=c.questions;renderQuestions();ready=true;if(/^https:\/\//.test(c.formsUrl)){ $('#forms').href=c.formsUrl;$('#forms').hidden=false;$('#formsHint').textContent=S.cls+'반 '+S.group+'모둠 · 아래 표와 그래프를 참고해 모둠 퀴즈를 진행하세요.'; } syncControls();renderData();showTab(S.tab);save(); } catch(e){ $('#banner').hidden=false;$('#banner').textContent='불러오기 실패: '+e.message; const b=document.createElement('button');b.textContent='다시 불러오기';b.onclick=()=>{ $('#banner').hidden=true;config();};$('#banner').append(b);ready=false;renderStatus();} }
+const SETUP=['커튼을 치고 불필요한 조명을 껐다','네오픽셀 LED 1개, 흰색, 밝기를 선생님이 정한 값으로 유지한다','LED와 센서의 높이를 맞추고 센서를 LED 정면으로 향하게 했다','줄자의 0점을 LED 칩 표면에 맞췄다','측정 중 센서 앞을 손이나 몸으로 가리지 않는다'];
+$('#setup').innerHTML=SETUP.map((s,i)=>`<label><input type="checkbox" data-i="${i}" ${S.setup.includes(i)?'checked':''}> ${s}</label>`).join(''); document.querySelectorAll('#setup input').forEach(b=>b.onchange=()=>{S.setup=[...document.querySelectorAll('#setup input:checked')].map(x=>+x.dataset.i);save();});
+function applyMode(){S.manual=$('#manual').checked;$('#manualMeasure').checked=S.manual;$('#inputModeHint').textContent=S.manual?'조도를 입력한 뒤 측정값 기록을 누르세요. 위 표에서 거리별 값을 한 번에 입력할 수도 있어요.':'연결한 센서의 평균 조도를 자동으로 기록해요.';$('#luxin').readOnly=!S.manual;$('#luxin').placeholder=S.manual?'읽은 값을 직접 입력':'센서 연결 후 자동 입력';$('#bgread').disabled=S.manual||measuring;save();}
+$('#manual').onchange=applyMode;
+$('#manualMeasure').onchange=()=>{$('#manual').checked=$('#manualMeasure').checked;applyMode();};
+$('#connect').onclick=async()=>{$('#connect').disabled=true;try{status('#bstat',PASCO.needsExternal?'새 센서 연결창에서 센서 선택·연결 버튼을 눌러 주세요. 연결창은 열어 두세요.':'연결 중…');const name=await PASCO.connect(()=>status('#bstat','연결이 끊겼어요. 다시 연결하세요.',true));status('#bstat','✓ 연결됨: '+name);$('#manual').checked=false;applyMode();}catch(e){status('#bstat','연결 실패: '+e.message,true);}finally{$('#connect').disabled=false;}};
+let polling=false;setInterval(async()=>{if(!PASCO.connected||document.hidden||measuring||polling)return;polling=true;try{const v=await PASCO.readOnce();$('#live').textContent=fmt(v);if(!S.manual)$('#luxin').value=fmt(v);}catch(e){status('#bstat','센서 읽기 실패: '+e.message,true);}finally{polling=false;}},1000);
+function background(v){S.bg=v;status('#bgStatus',v===null?'배경 조도 미측정':'✓ 이후 측정에 적용할 배경 조도: '+fmt(v)+' lx');recordHint();save();}
+$('#bg').oninput=()=>{const value=$('#bg').value;if(value!==''&&(!Number.isFinite(Number(value))||Number(value)<0)){status('#bgStatus','배경 조도는 0 이상의 숫자로 입력하세요.',true);return;} background(value===''?null:Number(value));};
+$('#bgread').onclick=async()=>{measuring=true;updateMeasurementBackupControls();$('#bgread').disabled=true;try{status('#bgStatus','LED를 끈 상태에서 배경 측정 중…');const v=await PASCO.readAvg();$('#bg').value=fmt(v);background(v);}catch(e){status('#bgStatus','배경 측정 실패: '+e.message,true);}finally{measuring=false;applyMode();}};
+function measurementNotice(message,warn=false){document.querySelectorAll('[data-reset-status]').forEach(el=>{el.textContent=message;el.classList.toggle('warn',warn);});}
+function measurementBackup(){try{const b=JSON.parse(localStorage.getItem(KEY+'-reset-backup'));return b?.state&&b.state.owner===S.owner&&b.state.cls===S.cls&&b.state.group===S.group?b:null;}catch(e){return null;}}
+function hasMeasurementState(){const a=S.graph.analysis||{};return S.rows.length||S.history.length||S.bg!==null||a.linearAxis||a.origin||a.reason||Object.values(a.observations||{}).some(Boolean);}
+function updateMeasurementBackupControls(){
+  const busy=measuring||submittingReport;
+  document.querySelectorAll('[data-reset-measurements]').forEach(el=>el.disabled=busy||!hasMeasurementState());
+  document.querySelectorAll('[data-restore-measurements]').forEach(el=>{el.hidden=!measurementBackup();el.disabled=busy;});
+}
+function measurementOperationBusy(){return measuring||submittingReport||['gsubmit','gdraft','gload'].some(id=>$('#'+id).disabled);}
+function refreshMeasurementState(){
+  drawn='';groupError=reportError='';$('#chart').hidden=true;$('#png').disabled=true;$('#luxin').value='';
+  ['measureStatus','graphStatus','loadStatus'].forEach(id=>status('#'+id,''));
+  syncControls();renderData();showTab(S.tab);
+}
+function resetMeasurements(){
+  if(measurementOperationBusy())return measurementNotice('측정·저장 중에는 초기화할 수 없어요.',true);
+  if(!hasMeasurementState())return measurementNotice('초기화할 측정 자료가 없어요. 이전 백업은 그대로 유지해요.');
+  if(!confirm('측정 기록 '+S.rows.length+'개, 배경값, 변경 이력, 그래프 분석을 초기화하고 1차부터 다시 시작할까요?\n기존 자료는 이 기기에 백업해요. 모둠원·설계 답변·거리 조건·센서 연결과 서버 제출 자료는 유지해요.'))return;
+  try{
+    const backup={at:now(),state:clone(S)},next=clone(S);
+    Object.assign(next,{rows:[],history:[],bg:null,round:1,legacy:false,tab:'t2'});
+    next.graph.analysis={observations:{},linearAxis:'',origin:'',reason:''};
+    ['groupSig','sourceId','sourceAt','reportSig','reportAt','reportId'].forEach(key=>delete next[key]);
+    localStorage.setItem(KEY+'-reset-backup',JSON.stringify(backup));
+    // Commit to storage before replacing in-memory state. A failed write keeps measurements intact.
+    localStorage.setItem(KEY,JSON.stringify(next));S=next;
+    refreshMeasurementState();measurementNotice('✓ 측정을 초기화했어요. 배경 조도를 측정하고 1차부터 시작하세요. 이전 자료는 ‘직전 초기화 복원’으로 되돌릴 수 있어요.');
+  }catch(e){measurementNotice('초기화하지 못했어요. 기존 측정값은 유지돼요. '+e.message,true);}
+}
+function restoreMeasurements(){
+  if(measurementOperationBusy())return measurementNotice('측정·저장 중에는 복원할 수 없어요.',true);
+  const backup=measurementBackup();if(!backup)return measurementNotice('이 모둠의 초기화 백업이 없어요.',true);
+  if(!confirm('현재 측정 기록 '+S.rows.length+'개를 초기화 전 기록 '+backup.state.rows.length+'개로 되돌릴까요? 배경값·거리 조건·그래프 구성과 분석도 복원해요.'))return;
+  try{
+    const next=clone(S),old=backup.state;
+    ['rows','history','bg','distances','round','legacy','graph','groupSig','sourceId','sourceAt','reportSig','reportAt','reportId'].forEach(key=>{if(Object.hasOwn(old,key))next[key]=clone(old[key]);else delete next[key];});
+    next.tab=old.tab;localStorage.setItem(KEY,JSON.stringify(next));S=next;
+    refreshMeasurementState();measurementNotice('✓ 초기화 전 측정 자료를 복원했어요.');
+  }catch(e){measurementNotice('복원하지 못했어요. 현재 측정값은 유지돼요. '+e.message,true);}
+}
+document.querySelectorAll('[data-reset-measurements]').forEach(el=>el.onclick=resetMeasurements);
+document.querySelectorAll('[data-restore-measurements]').forEach(el=>el.onclick=restoreMeasurements);
+function log(action,before,after=null){S.history.push({action,at:now(),before:clone(before),after:after?clone(after):null});}
+function room(n){if(S.history.length+n>150)throw new Error('변경 이력은 최대 150건이에요. 현재 자료를 보존하고 교사에게 알려 주세요.');}
+let manualSignature = '';
+function manualDataSignature(){return JSON.stringify({distances:S.distances,bg:S.bg,rows:S.rows,history:S.history});}
+function renderManualTable(){
+  $('#manualTable').innerHTML='<table><thead><tr><th>거리 (cm)</th><th>1차 원래 조도 (lx)</th><th>2차 원래 조도 (lx)</th><th>3차 원래 조도 (lx)</th></tr></thead><tbody>'+S.distances.map(d=>`<tr><td>${fmt(d)}</td>${[1,2,3].map(round=>{const r=S.rows.find(r=>r.d===d&&r.round===round);return `<td><input type="number" min="0" step="any" inputmode="decimal" style="min-width:100px" data-manual-distance="${d}" data-manual-round="${round}" aria-label="${d}cm ${round}차 원래 조도" value="${r?r.lux:''}" placeholder="미입력"></td>`;}).join('')}</tr>`).join('')+'</tbody></table>';
+  manualSignature=manualDataSignature();
+}
+function manualChanges(values){
+  if(S.bg===null||!Number.isFinite(S.bg)||S.bg<0)throw new Error('실험 준비에서 배경 조도를 먼저 입력하세요. 빼 줄 배경값이 없으면 0을 입력하세요.');
+  const changes=[],seen=new Set();
+  values.forEach(v=>{
+    const text=String(v.value).trim();if(text==='')return;
+    const d=Number(v.d),round=Number(v.round),lux=Number(text),key=round+':'+d;
+    if(!S.distances.includes(d)||![1,2,3].includes(round)||seen.has(key))throw new Error('거리·회차를 다시 불러와 주세요.');
+    seen.add(key);
+    if(!Number.isFinite(lux)||lux<0)throw new Error(d+'cm '+round+'차 조도는 0 이상의 숫자로 입력하세요.');
+    const before=S.rows.find(r=>r.d===d&&r.round===round);
+    if(!before||before.lux!==lux)changes.push({before,after:{d,round,lux,bg:S.bg,mode:'manual',at:now()}});
+  });
+  room(changes.filter(c=>c.before).length);
+  return changes;
+}
+function applyManualTable(){try{
+  if(measurementOperationBusy())throw new Error('측정·저장 중에는 입력값을 적용할 수 없어요.');
+  if(manualSignature!==manualDataSignature())throw new Error('측정 자료나 배경값이 바뀌었어요. 현재 기록 다시 불러오기를 누른 뒤 입력하세요.');
+  const values=[...document.querySelectorAll('[data-manual-distance]')].map(el=>({d:el.dataset.manualDistance,round:el.dataset.manualRound,value:el.value}));
+  const changes=manualChanges(values),replaced=changes.filter(c=>c.before).length;
+  if(!changes.length)return status('#manualStatus','새로 입력하거나 변경한 값이 없어요.');
+  if(replaced&&!confirm('기존 기록 '+replaced+'개를 입력한 값으로 바꿀까요? 이전 값은 변경 이력에 보존해요.'))return;
+  changes.forEach(({before,after})=>{if(before){log('remeasure',before,after);S.rows=S.rows.filter(r=>r!==before);}S.rows.push(after);});
+  $('#manual').checked=true;applyMode();save();renderData();renderManualTable();
+  status('#manualStatus','✓ '+changes.length+'개 조도를 기록했어요. 결과표와 그래프에 배경을 뺀 값이 적용돼요.');
+}catch(e){status('#manualStatus','입력 실패: '+e.message,true);}}
+$('#manualEntry').ontoggle=()=>{if($('#manualEntry').open){renderManualTable();status('#manualStatus','');}};
+$('#applyManual').onclick=applyManualTable;
+$('#reloadManual').onclick=()=>{if(measurementOperationBusy())return;if(!confirm('적용하지 않은 입력값을 비우고 현재 측정 기록을 다시 불러올까요?'))return;renderManualTable();status('#manualStatus','현재 기록을 불러왔어요.');};
+$('#rebackground').onclick=()=>{try{if(S.bg===null)throw new Error('배경 조도를 먼저 측정하세요.');const rows=S.rows.filter(r=>r.bg!==S.bg);room(rows.length);if(!rows.length)return status('#bgStatus','현재 배경값과 다른 기존 기록이 없어요.');if(!confirm(rows.length+'개 기존 기록의 배경값을 '+S.bg+' lx로 정정할까요? 원래 기록은 이력에 보존돼요.'))return;rows.forEach(r=>{const after={...r,bg:S.bg};log('background',r,after);r.bg=S.bg;});save();renderData();status('#bgStatus','기존 기록의 배경값을 정정했어요. 모둠 자료를 다시 제출하세요.');}catch(e){status('#bgStatus',e.message,true);}};
+function validDistances(ds){return ds.length>=5&&ds.length<=6&&ds.every(d=>Number.isFinite(d)&&d>0)&&new Set(ds).size===ds.length&&ds.some(d=>ds.some(e=>Math.abs(e-d*2)<1e-8));}
+$('#setDistances').onclick=()=>{try{const text=$('#distances').value;const parts=text.split(/[,，]/).map(x=>x.trim());const ds=parts.map(Number).sort((a,b)=>a-b);if(parts.some(x=>!x)||!validDistances(ds))throw new Error('양수 거리 5~6개와 두 배인 거리 조건을 입력하세요.');const removed=S.rows.filter(r=>!ds.includes(r.d));room(removed.length);if(removed.length&&!confirm('새 목록에서 빠진 거리의 기록 '+removed.length+'개는 활성 표에서 제외하고 이력에 보관해요. 변경할까요?'))return;removed.forEach(r=>log('distance',r));S.rows=S.rows.filter(r=>ds.includes(r.d));S.distances=ds;save();renderData();status('#distanceStatus','✓ 공통 거리 목록 확정: '+ds.join(', ')+' cm');}catch(e){status('#distanceStatus',e.message,true);}};
+$('#start').onclick=()=>{if(!validDistances(S.distances)||S.bg===null)return status('#distanceStatus','거리 조건을 확정하고 배경 조도를 먼저 측정하세요.',true);S.round=1;renderData();showTab('t3');};
+const corr=r=>r.lux-r.bg;
+const trials=d=>[1,2,3].map(round=>S.rows.find(r=>r.d===d&&r.round===round));
+const mean=d=>{const rs=trials(d);return rs.every(Boolean)?rs.reduce((sum,r)=>sum+corr(r),0)/3:null;};
+const complete=()=>validDistances(S.distances)&&S.distances.every(d=>mean(d)!==null);
+function table(){return '<table><thead><tr><th>거리 (cm)</th><th>1차 (lx)</th><th>2차 (lx)</th><th>3차 (lx)</th><th>평균 (lx)</th><th>상태</th></tr></thead><tbody>'+S.distances.map(d=>{const rs=trials(d),n=rs.filter(Boolean).length;return `<tr><td>${fmt(d)}</td>${rs.map((r,i)=>`<td>${r?`<button data-record="${i+1}:${d}" aria-label="${i+1}차 ${d}cm 기록 상세">${fmt(corr(r))}</button>`:'—'}</td>`).join('')}<td>${fmt(mean(d))}</td><td>${n}/3회</td></tr>`;}).join('')+'</tbody></table>';}
+function recordDetail(round,d){const r=S.rows.find(x=>x.round===round&&x.d===d);if(!r)return;$('#recordDetail').hidden=false;$('#recordDetail').innerHTML=`<h3>${round}차 · ${d} cm</h3><p>원래 값 ${fmt(r.lux)} lx − 배경 ${fmt(r.bg)} lx = ${fmt(corr(r))} lx<br><span class="muted">${esc(r.at)} · ${esc(r.mode)}</span></p><button class="btn sub" id="remeasure">이 조건 다시 측정</button> <button class="btn sub" id="deleteRecord">이 기록 삭제</button>`;$('#remeasure').onclick=()=>{S.round=round;renderData(d);showTab('t3');$('#luxin').focus();};$('#deleteRecord').onclick=()=>{try{room(1);if(!confirm(round+'차 '+d+' cm, 원래 값 '+r.lux+' lx (보정 '+corr(r)+' lx)를 삭제할까요? 이력에 보관해요.'))return;log('delete',r);S.rows=S.rows.filter(x=>x!==r);save();renderData();}catch(e){status('#measureStatus',e.message,true);}};}
+function renderData(selected){$('#distances').value=S.distances.join(', ');$('#legacyStatus').hidden=!S.legacy;$('#legacyStatus').textContent='이전 자료 · 1회 측정. 기존 값은 1차에만 표시하며 2·3차를 새로 측정해야 해요.';
+$('#rounds').innerHTML=[1,2,3].map(n=>`<button class="${S.round===n?'on':''}" data-round="${n}" aria-pressed="${S.round===n}">${n}차 · ${S.rows.filter(r=>r.round===n).length}/${S.distances.length}</button>`).join('');document.querySelectorAll('[data-round]').forEach(b=>b.onclick=()=>{S.round=+b.dataset.round;save();renderData();});$('#roundTitle').textContent=S.round+'차 측정';$('#din').innerHTML=S.distances.map(d=>`<option value="${d}">${d} cm</option>`).join('');const next=S.distances.find(d=>!S.rows.some(r=>r.round===S.round&&r.d===d));$('#din').value=selected??next??S.distances[0];recordHint();$('#nextRound').hidden=next!==undefined||S.round===3;$('#nextRound').textContent=(S.round+1)+'차 측정 시작 →';$('#nextRound').onclick=()=>{S.round++;save();renderData();};$('#measureTable').innerHTML=table();$('#graphTable').innerHTML=graphTable();document.querySelectorAll('[data-record]').forEach(b=>b.onclick=()=>{const [r,d]=b.dataset.record.split(':').map(Number);recordDetail(r,d);if(S.tab==='t4')showTab('t3');});
+$('#rawTable').innerHTML='<table><tr><th>회차</th><th>거리 (cm)</th><th>원래 조도 (lx)</th><th>배경 (lx)</th><th>시각</th><th>방식</th></tr>'+S.rows.map(r=>`<tr><td>${r.round}</td><td>${fmt(r.d)}</td><td>${fmt(r.lux)}</td><td>${fmt(r.bg)}</td><td>${esc(r.at)}</td><td>${esc(r.mode)}</td></tr>`).join('')+'</table>';
+const names={remeasure:'재측정',delete:'삭제',distance:'거리 제외',background:'배경 정정'};$('#history').innerHTML='<p>변경 이력 '+S.history.length+'건</p>'+S.history.map(h=>`<p class="muted">${esc(h.at)} · ${names[h.action]} · ${h.before.round}차 ${h.before.d} cm · 원래 ${fmt(h.before.lux)} / 배경 ${fmt(h.before.bg)} lx → ${h.after?'원래 '+fmt(h.after.lux)+' / 배경 '+fmt(h.after.bg)+' lx':'활성 기록에서 제외'}</p>`).join('');$('#recordDetail').hidden=true;status('#negativeStatus',S.rows.some(r=>corr(r)<0)?'음수 보정값이 있어요. 배경과 설치 조건을 확인하세요. 값은 그대로 보존해요.':'');renderStatus();}
+function recordHint(){const r=S.rows.find(x=>x.round===S.round&&x.d===Number($('#din').value));$('#recordHint').textContent=r?'이미 기록됨: '+fmt(corr(r))+' lx. 다시 기록하면 확인 후 재측정 이력을 남겨요.':'배경값 '+fmt(S.bg)+' lx를 적용해 기록해요.';$('#keep').textContent=r?'이 조건 재측정':'측정값 기록';}
+$('#din').onchange=recordHint;
+$('#keep').onclick=async()=>{try{if(S.bg===null)throw new Error('실험 준비에서 배경 조도를 먼저 측정하세요.');const d=Number($('#din').value),round=S.round,bg=S.bg,cls=S.cls,group=S.group,mode=S.manual?'manual':'sensor';const previous=S.rows.find(r=>r.d===d&&r.round===round);if(previous){room(1);if(!confirm(round+'차 '+d+' cm 기록 ('+fmt(corr(previous))+' lx)을 재측정할까요? 이전 기록을 보존해요.'))return;}let lux;if(S.manual){if($('#luxin').value==='')throw new Error('조도 값을 입력하세요.');lux=Number($('#luxin').value);}else{measuring=true;busyMeasurement(true);status('#measureStatus','센서 평균값 측정 중…');lux=await PASCO.readAvg();}if(!Number.isFinite(lux)||lux<0)throw new Error('조도는 0 이상의 숫자로 입력하세요.');if(cls!==S.cls||group!==S.group)throw new Error('반·모둠이 바뀌었어요. 새 모둠에서 다시 측정하세요.');const row={d,round,bg,lux,mode,at:now()};if(previous){log('remeasure',previous,row);S.rows=S.rows.filter(r=>r!==previous);}S.rows.push(row);save();renderData();if(S.manual)$('#luxin').value='';status('#measureStatus',round+'차 '+d+' cm 기록 완료'+(S.distances.every(x=>S.rows.some(r=>r.round===round&&r.d===x))?' · 이번 회차를 마쳤어요.':''));}catch(e){status('#measureStatus','기록 실패: '+e.message,true);}finally{measuring=false;busyMeasurement(false);renderStatus();}};
+function busyMeasurement(b){['keep','manual','manualMeasure','applyManual','reloadManual','bg','bgread','setDistances','rebackground','gsubmit','gdraft','gload','din'].forEach(id=>$('#'+id).disabled=b);document.querySelectorAll('[data-round],[data-record],#remeasure,#deleteRecord,nav button,[data-next],#members input,[data-reset-measurements],[data-restore-measurements]').forEach(el=>el.disabled=b);if(!b)$('#bgread').disabled=S.manual;}
+async function submitGroup(draft){const btn=$(draft?'#gdraft':'#gsubmit');btn.disabled=true;groupError='';try{requireIdentity();validateMembers(!draft);if(!validDistances(S.distances))throw new Error('거리 조건을 먼저 확정하세요.');if(!draft&&!complete())throw new Error('모든 거리에서 1·2·3차를 완료하세요.');const signature=dataSig(),payload=clone({...data(),cls:S.cls,group:S.group,status:draft?'draft':'submitted'});const g=await api('submitGroup',payload);if(payload.cls!==S.cls||payload.group!==S.group)throw new Error('다른 반·모둠이 선택됐어요. 저장된 자료는 제출한 모둠에서 불러오세요.');if(!draft){S.groupSig=signature;S.sourceId=g.id;S.sourceAt=g.at;S.shareCode=g.shareCode||'';$('#shareCode').value=S.shareCode;save();}renderStatus();if(draft)status('#groupStatus','모둠 자료 임시 저장 완료 · 최종 제출은 별도예요.');}catch(e){groupError='저장 실패: '+e.message+' · 버튼을 눌러 다시 시도하세요.';status('#groupStatus',groupError,true);}finally{btn.disabled=false;}}
+$('#gsubmit').onclick=()=>submitGroup(false);$('#gdraft').onclick=()=>submitGroup(true);
+$('#gload').onclick=async()=>{const b=$('#gload');b.disabled=true;try{requireIdentity();const cls=S.cls,group=S.group;const before=dataSig();status('#loadStatus','우리 모둠 자료 불러오는 중…');const g=await api('loadGroup',cls,group,$('#shareCode').value);if(cls!==S.cls||group!==S.group)throw new Error('반·모둠이 바뀌었어요. 다시 불러오세요.');if(!g)throw new Error('제출된 모둠 자료가 없어요.');if((S.rows.length||before!==dataSig())&&!confirm('현재 측정값 '+S.rows.length+'개를 제출된 모둠 자료로 대체할까요? 현재 자료는 이 기기에 별도 보관해요.'))return;if(S.rows.length)localStorage.setItem(KEY+'-backup-'+Date.now(),JSON.stringify(S));if(g.version===2){Object.assign(S,{distances:g.distances,members:g.members||[],bg:g.bg,rows:g.rows,history:g.history,legacy:false,sourceId:g.id,sourceAt:g.at,shareCode:g.shareCode||''});if(g.activity){const a=g.activity.answers||{};QS.forEach(q=>{if(q.type==='text')S.ans[q.id]=a[q.id]||'';else if(q.type==='vars')S.vars=a[q.id]||{};else if(q.type==='graph'&&a[q.id])S.graph=clone(a[q.id]);});S.reportAt=g.activity.at;S.reportId=g.activity.id;renderQuestions();}S.groupSig=dataSig();}else{S.members=[];S.rows=g.rows.map(r=>({...r,round:1,bg:r.bg??g.bg,mode:'legacy',at:r.at||now()}));S.bg=g.bg;S.distances=[...new Set(S.rows.map(r=>r.d))].sort((a,b)=>a-b);S.history=[];S.legacy=true;delete S.groupSig;delete S.sourceId;}groupError='';syncControls();save();renderData();status('#loadStatus','✓ 모둠 활동 불러오기 완료 · '+(g.at||''));}catch(e){status('#loadStatus','불러오기 실패: '+e.message,true);}finally{b.disabled=false;}};
+const XAXES={distance:'거리 d (cm)',squared:'거리의 제곱 d² (cm²)',inverseSquared:'거리 제곱의 역수 1/d² (cm⁻²)'};
+const AXES={...XAXES,mean:'조도 (lx, 배경을 뺀 3회 평균)'};
+function axisValue(d,axis=S.graph.xaxis){return axis==='squared'?d*d:axis==='inverseSquared'?1/(d*d):d;}
+function axisNumber(n){return !Number.isFinite(n)?'—':n===0?'0':Number(n.toPrecision(3)).toString();}
+function normalizeGraph(){
+  S.graph={title:'',xaxis:'',showTrials:false,connectPoints:false,...S.graph,yaxis:'mean'};
+  // Old local drafts may have reversed axes. Stored submissions remain untouched.
+  if(S.graph.xaxis&&!Object.hasOwn(XAXES,S.graph.xaxis))S.graph.xaxis='distance';
+  const a=S.graph.analysis||{};
+  S.graph.analysis={observations:{...a.observations},linearAxis:a.linearAxis||'',origin:a.origin||'',reason:a.reason||''};
+}
+function graphTable(){
+  const axis=S.graph.xaxis,showTransform=Object.hasOwn(XAXES,axis)&&axis!=='distance';
+  return '<table><thead><tr><th>거리 d (cm)</th>'+(showTransform?'<th>'+XAXES[axis]+'</th>':'')+'<th>조도 (lx, 3회 평균)</th></tr></thead><tbody>'+S.distances.map(d=>'<tr><td>'+fmt(d)+'</td>'+(showTransform?'<td>'+axisNumber(axisValue(d))+'</td>':'')+'<td>'+fmt(mean(d))+'</td></tr>').join('')+'</tbody></table>';
+}
+function syncAxisView(){
+  const axis=S.graph.xaxis;
+  $('#axisObservation').disabled=!XAXES[axis];
+  $('#axisObservation').value=S.graph.analysis.observations[axis]||'';
+  $('#axisObservationLabel').textContent=(XAXES[axis]||'이 산점도')+'에서 관찰한 점 (선택)';
+  $('#axisGuide').textContent={distance:'거리가 늘어날 때 조도가 어떻게 달라지나요? 점들의 배열이 휘어지는지 살펴보세요.',squared:'가로축의 간격이 d²로 바뀌었어요. 거리 산점도와 비교해 어떤 모양이 됐나요?',inverseSquared:'가까운 거리는 오른쪽, 먼 거리는 왼쪽에 놓여요. 점들이 직선에 가까운지, 그 방향이 원점 가까이를 향하는지 살펴보세요.'}[axis]||'가로축을 선택하고 산점도를 그려 보세요.';
+  $('#graphTable').innerHTML=graphTable();
+}
+Object.entries(XAXES).forEach(([k,v])=>$('#xaxis').add(new Option(v,k)));
+$('#xaxis').insertBefore(new Option('선택하세요',''),$('#xaxis').firstChild);
+$('#xaxis').onchange=()=>{S.graph.xaxis=$('#xaxis').value;syncAxisView();save();};
+$('#axisObservation').oninput=()=>{if(XAXES[S.graph.xaxis])S.graph.analysis.observations[S.graph.xaxis]=$('#axisObservation').value;save();};
+[['linearAxis','linearAxis'],['originCheck','origin'],['analysisReason','reason']].forEach(([id,key])=>{
+  $('#'+id)[id==='analysisReason'?'oninput':'onchange']=()=>{S.graph.analysis[key]=$('#'+id).value;save();};
 });
-window.addEventListener('pagehide',()=>send({type:'disconnected'}));
+$('#connectPoints').onchange=()=>{const redraw=drawn===graphSig();S.graph.connectPoints=$('#connectPoints').checked;save();if(redraw)drawChart();};
+$('#graphTitle').oninput=()=>{S.graph.title=$('#graphTitle').value;save();};$('#showTrials').onchange=()=>{S.graph.showTrials=$('#showTrials').checked;save();};
+function syncControls(){normalizeGraph();identity();syncMembers();$('#manual').checked=S.manual!==false;applyMode();$('#bg').value=S.bg===null?'':S.bg;status('#bgStatus',S.bg===null?'배경 조도 미측정':'✓ 이후 측정에 적용할 배경 조도: '+fmt(S.bg)+' lx');$('#graphTitle').value=S.graph.title;$('#xaxis').value=S.graph.xaxis;$('#showTrials').checked=S.graph.showTrials;$('#connectPoints').checked=!!S.graph.connectPoints;$('#linearAxis').value=S.graph.analysis.linearAxis;$('#originCheck').value=S.graph.analysis.origin;$('#analysisReason').value=S.graph.analysis.reason;syncAxisView();['indep','dep'].forEach(k=>$('#'+k).value=S.vars[k]||'');document.querySelectorAll('#ctrl input').forEach(b=>b.checked=(S.vars.ctrl||'').split(', ').includes(b.value));document.querySelectorAll('#setup input').forEach(b=>b.checked=S.setup.includes(+b.dataset.i));}
+function graphValid(){if(!complete())throw new Error('모든 거리에서 3회 측정한 자료가 필요해요.');if(!S.graph.title.trim()||!Object.hasOwn(XAXES,S.graph.xaxis)||S.graph.yaxis!=='mean')throw new Error('그래프 제목과 가로축을 선택하세요. 세로축은 조도로 고정해요.');}
+function analysisValid(){const a=S.graph.analysis;if(![...Object.keys(XAXES),'unclear'].includes(a.linearAxis)||!['yes','no','unclear'].includes(a.origin)||!a.reason.trim())throw new Error('산점도를 비교해 직선에 가까운 축, 원점과의 관계, 내 자료의 근거를 작성하세요.');}
+function drawChart(){try{graphValid();const canvas=$('#chart'),ctx=canvas.getContext('2d'),w=1000,h=650,L=115,R=45,B=105;let T=125;canvas.width=w;canvas.height=h;ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.font='bold 26px system-ui';const title=S.graph.title.trim(),lines=[];let line='';for(const c of title){if(ctx.measureText(line+c).width>w-80){lines.push(line);line=c;}else line+=c;}if(line)lines.push(line);T=Math.max(125,lines.length*29+62);const groups=[{name:'평균',color:'#245ad5',radius:8,rows:S.distances.map(d=>({d,y:mean(d)}))}];if(S.graph.showTrials)[1,2,3].forEach((round,i)=>groups.push({name:round+'차',color:['#a855f7','#b85d0c','#12806c'][i],radius:4,rows:S.rows.filter(r=>r.round===round).map(r=>({d:r.d,y:corr(r)}))}));groups.forEach(g=>g.points=g.rows.map(r=>({x:axisValue(r.d),y:r.y})));const pts=groups.flatMap(g=>g.points);function range(k){let lo=Math.min(0,...pts.map(p=>p[k])),hi=Math.max(0,...pts.map(p=>p[k]));const span=hi-lo||1;return[lo-(lo<0?span*.1:0),hi+span*.1];}const [xmin,xmax]=range('x'),[ymin,ymax]=range('y');const px=x=>L+(x-xmin)/(xmax-xmin)*(w-L-R),py=y=>h-B-(y-ymin)/(ymax-ymin)*(h-T-B);ctx.font='16px system-ui';for(let i=0;i<=5;i++){const x=xmin+(xmax-xmin)*i/5,y=ymin+(ymax-ymin)*i/5;ctx.strokeStyle='#e2e8f0';ctx.beginPath();ctx.moveTo(px(x),T);ctx.lineTo(px(x),h-B);ctx.moveTo(L,py(y));ctx.lineTo(w-R,py(y));ctx.stroke();ctx.fillStyle='#526078';ctx.textAlign='center';ctx.fillText(axisNumber(x),px(x),h-B+26);ctx.textAlign='right';ctx.fillText(fmt(y),L-14,py(y)+6);}ctx.strokeStyle='#334155';ctx.beginPath();ctx.moveTo(L,T);ctx.lineTo(L,h-B);ctx.lineTo(w-R,h-B);ctx.stroke();if(S.graph.connectPoints){const ordered=groups[0].points.slice().sort((a,b)=>a.x-b.x);ctx.save();ctx.strokeStyle='#64748b';ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.beginPath();ordered.forEach((p,i)=>{if(i)ctx.lineTo(px(p.x),py(p.y));else ctx.moveTo(px(p.x),py(p.y));});ctx.stroke();ctx.restore();}groups.forEach(g=>{ctx.fillStyle=g.color;g.points.forEach(p=>{ctx.beginPath();ctx.arc(px(p.x),py(p.y),g.radius,0,Math.PI*2);ctx.fill();});});ctx.fillStyle='#182339';ctx.font='bold 26px system-ui';ctx.textAlign='center';lines.forEach((text,i)=>ctx.fillText(text,w/2,35+i*29));ctx.font='18px system-ui';ctx.fillText(AXES[S.graph.xaxis],(L+w-R)/2,h-38);ctx.save();ctx.translate(28,(T+h-B)/2);ctx.rotate(-Math.PI/2);ctx.fillText(AXES[S.graph.yaxis],0,0);ctx.restore();ctx.font='16px system-ui';groups.forEach((g,i)=>{ctx.fillStyle=g.color;ctx.beginPath();ctx.arc(L+20+i*115,T-20,5,0,Math.PI*2);ctx.fill();ctx.textAlign='left';ctx.fillText(g.name,L+33+i*115,T-14);});if(S.graph.connectPoints){const x=L+20+groups.length*115;ctx.save();ctx.strokeStyle='#64748b';ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.beginPath();ctx.moveTo(x,T-20);ctx.lineTo(x+35,T-20);ctx.stroke();ctx.restore();ctx.fillStyle='#526078';ctx.textAlign='left';ctx.fillText('평균점 연결',x+43,T-14);}drawn=graphSig();canvas.hidden=false;canvas.setAttribute('aria-label',S.graph.title+' · 가로축 '+AXES[S.graph.xaxis]+' · 세로축 '+AXES[S.graph.yaxis]+(S.graph.connectPoints?' · 평균점 점선 연결':''));$('#png').disabled=false;status('#graphStatus','✓ 현재 자료로 산점도를 그렸어요.');}catch(e){status('#graphStatus',e.message,true);}}
+$('#draw').onclick=drawChart;
+function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+$('#png').onclick=()=>{if(drawn!==graphSig())return status('#graphStatus','그래프를 다시 그려 주세요.',true);$('#chart').toBlob(blob=>blob&&download(blob,'빛실험_'+S.cls+'반_'+S.group+'모둠_그래프.png'));};
+const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+$('#dataCsv').onclick=()=>{const header=['반','모둠',...Array.from({length:4},(_,i)=>['모둠원'+(i+1)+' 번호','모둠원'+(i+1)+' 이름']).flat(),'거리(cm)','거리제곱(cm²)','거리제곱역수(cm⁻²)','1차 보정(lx)','2차 보정(lx)','3차 보정(lx)','평균(lx)','상태',... [1,2,3].flatMap(n=>[n+'차 원래(lx)',n+'차 배경(lx)',n+'차 시각',n+'차 방식'])];const rows=S.distances.map(d=>{const rs=trials(d);return[S.cls,S.group,...memberData().flatMap(m=>[m.num,m.name]),d,d*d,1/(d*d),...rs.map(r=>r?corr(r):''),mean(d)??'',rs.filter(Boolean).length+'/3회',...rs.flatMap(r=>r?[r.lux,r.bg,r.at,r.mode]:['','','',''])];});download(new Blob(['\uFEFF'+[header,...rows].map(r=>r.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'빛실험_측정표.csv');};
+$('#rsubmit').onclick=async()=>{const b=$('#rsubmit');b.disabled=true;submittingReport=true;reportError='';try{requireIdentity();graphValid();analysisValid();validateMembers(true);if(drawn!==graphSig())throw new Error('현재 자료로 그래프를 다시 그려 주세요.');if(S.groupSig!==dataSig()||!S.sourceId)throw new Error('현재 모둠 자료를 먼저 제출하거나 불러와 주세요.');const answers={};QS.forEach(q=>{answers[q.id]=q.type==='text'?(S.ans[q.id]||''):q.type==='vars'?clone(S.vars):clone(S.graph);const empty=q.type==='text'?!answers[q.id].trim():q.type==='vars'?!S.vars.indep||!S.vars.dep||!S.vars.ctrl:false;if(q.required&&empty)throw new Error('필수 문항: '+q.text);});const signature=reportSig(),payload=clone({cls:S.cls,group:S.group,answers,graph:S.graph,data:data(),sourceId:S.sourceId,png:$('#chart').toDataURL('image/png')});const result=await api('submitReport',payload);S.reportSig=signature;S.reportAt=result.at;S.reportId=result.id;save();renderStatus();toast('모둠 기록과 그래프를 제출했어요.');}catch(e){reportError='제출 실패: '+e.message+' · 수정 후 다시 시도하세요.';status('#reportStatus',reportError,true);}finally{submittingReport=false;b.disabled=!ready;}};
+syncControls();renderData();showTab(S.tab);config();
 </script></body></html>
