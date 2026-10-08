@@ -1,0 +1,24 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>빛 실험 · 센서 연결</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6fa;color:#182339;font:17px/1.7 system-ui,sans-serif}main{max-width:600px;margin:36px auto;padding:24px;background:white;border:1px solid #dbe2ed;border-radius:16px}h1{font-size:24px}button{font:inherit;background:#245ad5;color:white;border:0;border-radius:9px;padding:12px 18px;cursor:pointer}button:disabled{opacity:.5}#status{overflow-wrap:anywhere}.muted{color:#526078}#live{font-size:42px;font-weight:700}[hidden]{display:none!important}@media(max-width:650px){main{margin:16px}}
+</style></head><body><main><h1>빛 실험 센서 연결</h1><p>센서 전원을 켜고 아래 버튼을 눌러 <b>Light</b> 센서를 선택하세요. SPARKvue와 연결돼 있다면 먼저 끊어 주세요.</p><button id="connect">센서 선택·연결</button><p id="status" role="status">연결 준비 중…</p><p>현재 조도 <span id="live">—</span> lx</p><p class="muted">연결 후 원래 활동 탭으로 돌아가 측정하세요. 이 연결창은 열어 두세요.</p></main><script src="pasco.js"></script><script>
+const params=new URLSearchParams(location.hash.slice(1)),channel=params.get('channel'),origin=params.get('origin');
+let valid=false,busy=false;
+try{const u=new URL(origin);valid=!!window.opener&&/^[0-9a-f-]{36}$/i.test(channel||'')&&u.protocol==='https:'&&u.hostname.endsWith('-script.googleusercontent.com');}catch(e){}
+const status=document.querySelector('#status'),button=document.querySelector('#connect');
+const send=message=>{if(valid)window.opener.postMessage({channel,...message},origin);};
+if(!valid){status.textContent='활동 홈페이지의 센서 연결 버튼으로 이 창을 열어 주세요.';button.disabled=true;}
+else if(!navigator.bluetooth){status.textContent='이 브라우저는 Web Bluetooth를 지원하지 않아요. 활동 페이지에서 조도 직접 입력을 사용하세요.';button.disabled=true;send({type:'connect-error',error:status.textContent});}
+else status.textContent='센서 선택·연결 버튼을 누르세요.';
+button.onclick=async()=>{button.disabled=true;try{
+  const name=await PASCO.connect(()=>{status.textContent='센서 연결이 끊겼어요. 다시 연결하세요.';send({type:'disconnected'});});
+  status.textContent=name+' 연결 완료 · 원래 활동 탭으로 돌아가세요.';send({type:'connected',name});
+}catch(e){status.textContent='연결 실패: '+e.message;send({type:'connect-error',error:e.message});}finally{button.disabled=false;}};
+window.addEventListener('message',async event=>{
+  const m=event.data;
+  if(!valid||event.source!==window.opener||event.origin!==origin||m?.channel!==channel||m.type!=='request'||!['readOnce','readAvg'].includes(m.fn))return;
+  if(m.fn==='readAvg'&&(!Number.isInteger(m.n)||m.n<1||m.n>20))return send({type:'result',id:m.id,error:'평균 측정 횟수가 올바르지 않아요.'});
+  try{const lux=await PASCO[m.fn](m.n);document.querySelector('#live').textContent=Number(lux.toFixed(2));send({type:'result',id:m.id,lux});}
+  catch(e){send({type:'result',id:m.id,error:e.message});}
+});
+window.addEventListener('pagehide',()=>send({type:'disconnected'}));
+</script></body></html>

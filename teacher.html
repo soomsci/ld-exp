@@ -7,6 +7,7 @@
 <style>
   :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2433; --muted:#5b6475; --line:#dde1e8; --accent:#2563eb; --accent-ink:#fff; --ok:#15803d; --bad:#dc2626; --warn:#b45309; --sel:#eef4ff; }
   * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
   body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 system-ui, "Noto Sans KR", sans-serif; }
   header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 16px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   header h1 { font-size:18px; margin:0 auto 0 0; }
@@ -15,7 +16,8 @@
   nav button { padding:10px 18px; border:1px solid var(--line); background:var(--card); border-radius:10px; font:inherit; cursor:pointer; }
   nav button.on { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
   section { display:none; } section.on { display:block; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }
+  .scroll { overflow-x:auto; max-width:100%; }
+  .card { min-width:0; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }
   .grid { display:grid; grid-template-columns:minmax(320px, 2fr) 3fr; gap:16px; align-items:start; }
   @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
   .btn { padding:8px 14px; border:0; border-radius:8px; background:var(--accent); color:var(--accent-ink); font:inherit; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
@@ -25,12 +27,12 @@
   select, input, textarea { padding:6px 8px; border:1px solid var(--line); border-radius:8px; font:inherit; background:var(--card); color:var(--ink); }
   textarea { width:100%; min-height:60px; resize:vertical; }
   table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
-  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; white-space:nowrap; }
   th { background:var(--bg); font-size:13px; color:var(--muted); }
   #list tr { cursor:pointer; } #list tr:hover { background:var(--bg); } #list tr.sel { background:var(--sel); }
   .muted { color:var(--muted); font-size:13px; }
   .badge { display:inline-block; padding:0 8px; border-radius:99px; font-size:12px; border:1px solid currentColor; }
-  .s-채점완료 { color:var(--ok); } .s-제출 { color:var(--accent); } .s-재제출 { color:var(--warn); }
+  .s-채점완료 { color:var(--ok); } .s-제출 { color:var(--accent); } .s-재제출 { color:var(--warn); } .s-미제출 { color:var(--muted); }
   .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
   .q { border-top:1px solid var(--line); padding:12px 0; }
   .q:first-of-type { border-top:0; }
@@ -43,6 +45,8 @@
   img.graph { max-width:100%; border:1px solid var(--line); border-radius:8px; }
   #qedit td { vertical-align:middle; }
   #qedit textarea { min-height:48px; }
+  :focus-visible { outline:3px solid #c46900; outline-offset:3px; }
+  #notice { color:#a3450b; padding:8px 0; }
   #toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#1d2433; color:#fff; padding:10px 18px; border-radius:10px; display:none; max-width:90vw; z-index:9; }
 </style>
 </head>
@@ -50,10 +54,11 @@
 <header>
   <h1>📋 교사 대시보드: 빛의 세기와 거리</h1>
   <button class="btn sub" id="reload">🔄 새로고침</button>
+  <button class="btn" id="csv">⬇️ 성적 다운로드 (CSV)</button>
   <button class="btn sub" id="export">📊 성적표 시트로 내보내기</button>
   <a class="btn sub" id="sheet" target="_blank">시트 열기</a>
 </header>
-<main>
+<main><p id="notice" role="status"></p>
 <nav>
   <button data-tab="grade" class="on">제출 현황 · 채점</button>
   <button data-tab="qs">문항 · 배점 편집</button>
@@ -64,21 +69,22 @@
     <div class="card">
       <div class="filters">
         <select id="fcls"><option value="">전체 반</option><option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option></select>
-        <select id="fstat"><option value="">전체 상태</option><option value="todo">채점 필요</option><option value="done">채점완료</option></select>
+        <select id="fstat"><option value="">전체 상태</option><option value="todo">채점 필요</option><option value="done">채점완료</option><option value="none">미제출</option></select>
         <span class="muted" id="summary"></span>
       </div>
-      <table><thead><tr><th>반</th><th>번호</th><th>이름</th><th>모둠</th><th>제출</th><th>상태</th><th>총점</th></tr></thead><tbody id="list"></tbody></table>
+      <p class="muted" id="rosterHint" hidden>학생용은 로그인 없이 사용하며, 설계부터 그래프 분석까지 반·모둠별로 제출해요. 구성원 4명은 제출 당시 자료에서 확인하세요.</p>
+      <div class="scroll"><table><thead><tr><th>반</th><th>모둠</th><th>구성원</th><th>제출</th><th>상태</th><th>총점</th></tr></thead><tbody id="list"></tbody></table></div>
     </div>
-    <div class="card" id="detail"><p class="muted">왼쪽 목록에서 학생을 고르세요.</p></div>
+    <div class="card" id="detail"><p class="muted">왼쪽 목록에서 모둠을 고르세요.</p></div>
   </div>
 </section>
 
 <section id="qs">
   <div class="card">
     <p class="muted">발문, 배점, 필수 여부, 순서를 고치고 <b>[저장]</b>을 누르면 학생 화면에 바로 반영돼요 (학생은 새로고침 필요).
-      <b>변인 선택</b>과 <b>그래프</b> 유형은 하나씩만 둘 수 있어요. 문항을 삭제하면 그 문항의 답변과 점수는 대시보드에서 보이지 않게 돼요.</p>
-    <table><thead><tr><th style="width:70px">순서</th><th style="width:90px">단계</th><th style="width:120px">유형</th><th>발문</th><th style="width:80px">배점</th><th style="width:50px">필수</th><th style="width:60px"></th></tr></thead>
-      <tbody id="qedit"></tbody></table>
+      <b>변인 선택</b>과 <b>그래프</b> 유형은 하나씩만 둘 수 있어요. 현재 수업의 설계·그래프 항목만 편집해요. 과거 제출은 당시 문항 사본으로 열람해요. 남는 기존 항목의 배점을 유지하며 Forms와의 합산 배점은 별도로 확정하세요.</p>
+    <div class="scroll"><table><thead><tr><th style="width:70px">순서</th><th style="width:90px">단계</th><th style="width:120px">유형</th><th>발문</th><th style="width:80px">배점</th><th style="width:50px">필수</th><th style="width:60px"></th></tr></thead>
+      <tbody id="qedit"></tbody></table></div>
     <p style="margin-top:12px"><button class="btn sub" id="qadd">+ 문항 추가</button> <button class="btn" id="qsave">💾 저장</button>
       <span class="total" id="qtotal" style="margin-left:12px"></span></p>
   </div>
@@ -89,22 +95,25 @@
 <script>
 // ---------- 서버 호출 / 로컬 개발용 가짜 데이터 ----------
 const DEV = {
-  listReports: () => ({ sheetUrl: '#', questions: DEV.qs, reports: [
-    { email: 's1@school', cls: 2, num: 3, name: '김학생', group: 3, at: '09/24 19:00', status: '제출', total: '', feedback: '', scores: {}, img: '',
-      answers: { q1: '거리가 멀어지면 어두워질 것이다.', q2: { indep: '광원과 센서 사이의 거리', dep: '빛의 밝기(조도)', ctrl: 'LED의 색과 밝기 설정, 주변 밝기 (커튼·형광등), 광원과 센서 사이의 거리' }, q4: { xaxis: '1/d²', r2: 0.998, r2table: '거리 d: 0.6150 / d²: 0.4326 / 1/d: 0.9679 / 1/d²: 0.9980' }, q7: '조도는 거리의 제곱에 반비례한다.' } },
-    { email: 's2@school', cls: 1, num: 7, name: '이학생', group: 1, at: '09/24 19:05', status: '채점완료', total: 8, feedback: '잘했어요', scores: { q1: 2, q2: 2, q4: 2, q7: 2 }, img: '', answers: { q1: '가설', q7: '반비례' } },
+  listReports: () => ({ sheetUrl: '#', questions: DEV.qs, history: [], roster: DEV.roster, reports: [
+    { email: 's1@school', cls: 2, num: 3, name: '김학생', group: 3, at: '09/24 19:00', status: '제출', total: '', feedback: '', scores: {}, img: '', version:2, questions:DEV.qs, data:DEV.sample(),
+      answers: { q1: '거리가 멀어지면 어두워질 것이다.', q2: { indep: '광원과 센서 사이의 거리', dep: '빛의 밝기(조도)', ctrl: 'LED의 색과 밝기 설정, 주변 밝기 (커튼·형광등), 광원과 센서 사이의 거리' }, q4: {title:'거리와 조도 측정 결과',xaxis:'distance',yaxis:'mean',showTrials:true}, q7: '조도는 거리의 제곱에 반비례한다.' } },
+    { email: 's2@school', cls: 1, num: 7, name: '이학생', group: 1, at: '09/24 19:05', status: '채점완료', total: 5, feedback: '잘했어요', scores: { q1: 2, q7: 3 }, img: '', version:1, questions:[{id:'q1',stage:'설계',type:'text',text:'가설',points:2},{id:'q7',stage:'분석',type:'text',text:'Q3. 관계',points:3}], answers: { q1: '가설', q7: '반비례' } },
   ] }),
   qs: [
     { id: 'q1', stage: '설계', type: 'text', text: '가설', points: 2, required: true },
     { id: 'q2', stage: '설계', type: 'vars', text: '변인 정하기', points: 3, required: true },
-    { id: 'q4', stage: '분석', type: 'graph', text: '그래프 그리기', points: 2, required: true },
-    { id: 'q7', stage: '분석', type: 'text', text: 'Q3. 관계', points: 3, required: true },
+    { id: 'q3', stage: '설계', type: 'text', text: '측정 계획', points: 1, required: false },
+    { id: 'q4', stage: '그래프', type: 'graph', text: '그래프 제목과 두 축 구성', points: 2, required: true },
   ],
-  loadGroup: () => ({ bg: 12, rows: [{ d: 10, lux: 1010 }, { d: 20, lux: 262 }] }),
+  roster: [{ email: 's3@school', cls: 2, num: 9, name: '박미제출', group: 3 }],
+  sample: () => ({version:2,id:'local-sample',bg:12,distances:[5,10,15,20,25,30],history:[],rows:[1,2,3].flatMap(round=>[5,10,15,20,25,30].map(d=>({round,d,lux:10000/d/d+12+round,bg:12,mode:'manual',at:'2026-10-01T03:00:00Z'})))}),
+  loadGroup: () => DEV.sample(),
   getImage: () => '',
   saveGrade: (e, s) => Object.values(s).reduce((a, b) => a + Number(b), 0),
   saveQuestions: l => (DEV.qs = l),
   exportGrades: () => '#',
+  gradeTable: () => ({ header: ['반', '번호', '이름', '총점', '피드백'], rows: [[2, 3, '김학생', 8, '잘했어요, "굿"'], [1, 7, '=위험', '', '']] }),
 };
 const api = (fn, ...args) => new Promise((res, rej) => {
   if (!window.google?.script?.run) return res(DEV[fn](...args));
@@ -113,7 +122,7 @@ const api = (fn, ...args) => new Promise((res, rej) => {
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const toast = msg => { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3000); };
+const toast = msg => { $('#notice').textContent = msg; const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 3000); };
 const TYPE_NAME = { text: '서술형', vars: '변인 선택', graph: '그래프' };
 
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
@@ -122,17 +131,45 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
 });
 
 // ---------- 데이터 ----------
-let QS = [], REPORTS = [], cur = null;
+let QS = [], REPORTS = [], HISTORY = [], cur = null, dirty = false;
+const reportQS = r => r?.questions || QS;
+const reportMax = r => reportQS(r).reduce((sum,q)=>sum+q.points,0);
+// 저장 안 한 점수가 있으면 확인 후 진행
+const leaveOk = () => !dirty || confirm('저장하지 않은 점수/피드백이 있어요. 버리고 넘어갈까요?');
+addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
 const maxTotal = () => QS.reduce((a, q) => a + q.points, 0);
 async function load() {
   try {
     const d = await api('listReports');
-    QS = d.questions; REPORTS = d.reports; $('#sheet').href = d.sheetUrl;
+    QS = d.questions; HISTORY = d.history || []; Object.keys(groupCache).forEach(k=>delete groupCache[k]); $('#sheet').href = d.sheetUrl;
+    const done = new Set(d.reports.map(r => String(r.email).toLowerCase()));
+    REPORTS = d.reports;
+    $('#rosterHint').hidden = false;
+    dirty = false;
     renderList(); renderQEdit();
     if (cur) { const r = REPORTS.find(x => x.email === cur.email); r ? openReport(r) : $('#detail').innerHTML = ''; }
   } catch (e) { toast('불러오기 실패: ' + e.message); }
 }
-$('#reload').onclick = load;
+$('#reload').onclick = () => leaveOk() && load();
+// 엑셀에서 한글이 안 깨지도록 BOM 포함, 수식으로 실행되지 않도록 = + - @ 앞에 ' 추가
+const csvCell = v => {
+  let s = String(v ?? '');
+  if (typeof v === 'string' && /^[=+\-@]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+};
+$('#csv').onclick = async () => {
+  $('#csv').disabled = true;
+  try {
+    const { header, rows } = await api('gradeTable');
+    const csv = '\uFEFF' + [header, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `빛실험_성적_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.append(a); a.click(); a.remove();
+    toast(`${rows.length}모둠 결과을 다운로드했어요`);
+  } catch (e) { toast('다운로드 실패: ' + e.message); }
+  finally { $('#csv').disabled = false; }
+};
 $('#export').onclick = async () => {
   try { const url = await api('exportGrades'); toast('성적 시트를 만들었어요'); window.open(url, '_blank'); }
   catch (e) { toast('내보내기 실패: ' + e.message); }
@@ -142,18 +179,19 @@ $('#export').onclick = async () => {
 const graded = r => r.status === '채점완료';
 function filtered() {
   const c = $('#fcls').value, st = $('#fstat').value;
-  return REPORTS.filter(r => (!c || r.cls == c) && (!st || (st === 'done') === graded(r)))
-    .sort((a, b) => a.cls - b.cls || a.num - b.num);
+  const want = { done: graded, todo: r => r.status === '제출' || r.status === '재제출', none: r => r.status === '미제출' }[st];
+  return REPORTS.filter(r => (!c || r.cls == c) && (!want || want(r)))
+    .sort((a, b) => a.cls - b.cls || a.group - b.group || a.num - b.num);
 }
 function renderList() {
-  const rows = filtered(), done = rows.filter(graded);
+  const rows = filtered(), done = rows.filter(graded), none = rows.filter(r => r.status === '미제출').length;
   const avg = done.length ? (done.reduce((a, r) => a + Number(r.total || 0), 0) / done.length).toFixed(1) : '–';
-  $('#summary').textContent = `제출 ${rows.length}명 · 채점완료 ${done.length}명 · 평균 ${avg}/${maxTotal()}점`;
+  $('#summary').textContent = `제출 ${rows.length - none}모둠${none ? ` · 미제출 ${none}모둠` : ''} · 채점완료 ${done.length}모둠 · 평균 ${avg}점 (제출별 만점 확인)`;
   $('#list').innerHTML = rows.map(r => `<tr data-email="${esc(r.email)}" class="${cur?.email === r.email ? 'sel' : ''}">
-    <td>${r.cls}</td><td>${r.num}</td><td>${esc(r.name)}</td><td>${r.group}</td><td class="muted">${esc(r.at)}</td>
+    <td>${r.cls}</td><td>${r.group}</td><td>${r.groupActivity ? esc((r.data?.members||[]).filter(m=>m.name).map(m=>m.num+'번 '+m.name).join(', ')||'구성원 미입력') : esc(r.num+'번 '+r.name)+' (이전 개인 제출)'}</td><td class="muted">${esc(r.at)}</td>
     <td><span class="badge s-${esc(r.status)}">${esc(r.status)}</span></td><td>${r.total === '' ? '' : r.total}</td></tr>`).join('')
-    || '<tr><td colspan="7" class="muted">아직 제출이 없어요.</td></tr>';
-  document.querySelectorAll('#list tr[data-email]').forEach(tr => tr.onclick = () => openReport(REPORTS.find(r => r.email === tr.dataset.email)));
+    || '<tr><td colspan="6" class="muted">아직 제출이 없어요.</td></tr>';
+  document.querySelectorAll('#list tr[data-email]').forEach(tr => tr.onclick = () => { if (cur?.email !== tr.dataset.email && leaveOk()) openReport(REPORTS.find(r => r.email === tr.dataset.email)); });
 }
 $('#fcls').onchange = $('#fstat').onchange = renderList;
 
@@ -171,72 +209,104 @@ function showAnswer(q, a) {
 통제변인: ${esc(ctrl.join(', ')) || '–'}
 <span class="muted">→ 맞게 고른 것 ${hit}/${RIGHT.ctrl.length}, 잘못 고른 것 ${wrong.length}개${wrong.length ? ' (' + esc(wrong.join(', ')) + ')' : ''}</span></div>`;
   }
+  if (q.type === 'graph' && a.title !== undefined) {
+    const labels={distance:'거리 d (cm)',squared:'거리의 제곱 d² (cm²)',inverseSquared:'거리 제곱의 역수 1/d² (cm⁻²)',mean:'평균 조도 (lx)',unclear:'판단하기 어려움'};
+    const analysis=a.analysis;
+    const notes=analysis?Object.entries(analysis.observations||{}).filter(([axis])=>['distance','squared','inverseSquared'].includes(axis)).map(([axis,text])=>`${esc(labels[axis])}: ${esc(text)||'–'}`).join('\n'):'';
+    return `<div class="ans">제목: ${esc(a.title)}\n가로축: ${esc(labels[a.xaxis] || a.xaxis)}\n세로축: ${esc(labels[a.yaxis] || a.yaxis)}\n회차별 점: ${a.showTrials?'표시':'숨김'}\n평균점 점선 연결: ${a.connectPoints?'표시':'숨김'}${analysis?`\n\n산점도별 관찰\n${notes}\n\n가장 직선에 가까운 축: ${esc(labels[analysis.linearAxis]||analysis.linearAxis)}\n1/d² 산점도와 원점: ${esc({yes:'원점 가까이를 지나는 직선으로 볼 수 있음',no:'원점에서 벗어나거나 휘어짐',unclear:'판단하기 어려움'}[analysis.origin]||'–')}\n분석 근거: ${esc(analysis.reason)}`:'\n분석 활동 확장 이전 제출 · 당시 그래프 구성 보존'}<br><span class="muted">산점도와 실제 측정 근거를 함께 검토하세요. 예상과 다른 관찰도 그대로 보존해요.</span></div><div data-img></div>`;
+  }
   if (q.type === 'graph') return `<div class="ans">선택한 x축: <b>${esc(a.xaxis)}</b> ${mark(a.xaxis === '1/d²')} · R² = ${a.r2 != null ? Number(a.r2).toFixed(4) : '–'}
 <span class="muted">R² 비교: ${esc(a.r2table)}</span></div><div data-img></div>`;
+}
+
+function dataTable(g) {
+  const legacy = g.version !== 2;
+  const rows = (g.rows || []).map(r=>({...r,round:r.round || 1,bg:r.bg ?? g.bg ?? 0}));
+  const ds = g.distances || [...new Set(rows.map(r=>r.d))].sort((a,b)=>a-b);
+  const fmt = n => n == null ? '—' : Number(n.toFixed(2));
+  const values = d => [1,2,3].map(round=>rows.find(r=>r.d===d&&r.round===round));
+  const history = (g.history || []).map(h=>`<p class="muted">${esc(h.at)} · ${esc({remeasure:'재측정',delete:'삭제',distance:'거리 제외',background:'배경 정정'}[h.action])} · ${h.before.round}차 ${h.before.d} cm · 원래 ${h.before.lux} / 배경 ${h.before.bg} lx → ${h.after ? '원래 '+h.after.lux+' / 배경 '+h.after.bg+' lx' : '제외'}</p>`).join('');
+  const members=Array.from({length:4},(_,i)=>{const m=(g.members||[])[i];return `<li>모둠원 ${i+1}: ${m&&(m.num||m.name)?esc(m.num)+'번 '+esc(m.name):'미입력'}</li>`;}).join('');
+  return `<h3>모둠원</h3><ul>${members}</ul><p>${legacy ? '이전 자료 · 1회 측정' : '3회 측정 자료'} · 자료 ID ${esc(g.id || '없음')} · 제출 ${esc(g.at || '')}</p><table><tr><th>거리 (cm)</th><th>1차 (lx)</th><th>2차 (lx)</th><th>3차 (lx)</th><th>평균 (lx)</th><th>상태</th></tr>${ds.map(d=>{const rs=values(d),count=rs.filter(Boolean).length;return `<tr><td>${d}</td>${rs.map(r=>`<td>${r?fmt(r.lux-r.bg):'—'}</td>`).join('')}<td>${count===3?fmt(rs.reduce((a,r)=>a+r.lux-r.bg,0)/3):'—'}</td><td>${count}/3회</td></tr>`;}).join('')}</table><p class="muted">표의 값은 배경 조도를 뺀 값이에요.</p><details><summary>원래 값과 적용 배경값 · 변경 이력 ${(g.history || []).length}건</summary><table><tr><th>회차</th><th>거리</th><th>원래 값</th><th>배경값</th><th>시각</th><th>방식</th></tr>${rows.map(r=>`<tr><td>${r.round}</td><td>${r.d}</td><td>${r.lux}</td><td>${r.bg}</td><td>${esc(r.at||'')}</td><td>${esc(r.mode||'legacy')}</td></tr>`).join('')}</table>${history || '<p>변경 이력 없음</p>'}</details>`;
 }
 
 // ---------- 학생 상세 · 채점 ----------
 const groupCache = {};
 async function openReport(r) {
-  cur = r;
+  cur = r; dirty = false;
   document.querySelectorAll('#list tr').forEach(tr => tr.classList.toggle('sel', tr.dataset.email === r.email));
+  if (r.status === '미제출') {
+    $('#detail').innerHTML = `<h2 style="margin:0">${r.groupActivity ? r.cls+'반 '+r.group+'모둠' : r.cls+'반 '+r.num+'번 '+esc(r.name)+' (이전 개인 제출)'} <span class="badge s-미제출">미제출</span></h2><p class="muted">${esc(r.email)} · ${r.group}모둠 · 아직 보고서를 제출하지 않았어요.</p>`;
+    return;
+  }
   $('#detail').innerHTML = `
-    <h2 style="margin:0">${r.cls}반 ${r.num}번 ${esc(r.name)} <span class="badge s-${esc(r.status)}">${esc(r.status)}</span></h2>
-    <p class="muted">${esc(r.email)} · ${r.group}모둠 · 제출 ${esc(r.at)}${r.status === '재제출' ? ' · ⚠️ 채점 후 다시 제출했어요' : ''}</p>
-    <details><summary>${r.group}모둠 측정 데이터</summary><div id="gdata" class="muted">불러오는 중…</div></details>
-    ${QS.map((q, i) => `<div class="q">
+    <h2 style="margin:0">${r.groupActivity ? r.cls+'반 '+r.group+'모둠' : r.cls+'반 '+r.num+'번 '+esc(r.name)+' (이전 개인 제출)'} <span class="badge s-${esc(r.status)}">${esc(r.status)}</span></h2>
+    <p class="muted">${r.group}모둠 · 제출 ${esc(r.at)}${r.status === '재제출' ? ' · ⚠️ 채점 후 다시 제출했어요' : ''}</p>
+    <p class="muted">${r.version === 2 ? '3회 측정 · 새 수업 기록' : '이전 수업 기록 · 당시 문항과 배점'}${r._archived ? ' · 보관된 제출 (열람 전용)' : ''}</p>
+    <label>제출 이력 <select id="submissionHistory"></select></label>
+    <details open><summary>모둠 제출 당시 사용한 자료</summary><div id="snapshot" class="scroll">${r.data ? dataTable(r.data) : '이전 제출에는 당시 자료 사본이 없어요. 최신 모둠 자료와 구분해서 확인하세요.'}</div></details>
+    <details><summary>최신 ${r.group}모둠 측정 자료</summary><div id="gdata" class="scroll muted">불러오는 중…</div></details>
+    ${reportQS(r).map((q, i) => `<div class="q">
       <div class="qtext">${i + 1}. [${q.stage}·${TYPE_NAME[q.type]}] ${esc(q.text)}</div>
       ${showAnswer(q, r.answers[q.id])}
       <div class="score"><input type="number" min="0" max="${q.points}" step="0.5" data-q="${q.id}" value="${r.scores[q.id] ?? ''}"> / ${q.points}점
         <button class="btn sub sm" data-full="${q.id}">만점</button><button class="btn sub sm" data-zero="${q.id}">0점</button></div>
     </div>`).join('')}
-    <p class="qtext" style="margin-top:12px">피드백 (학생에게 전할 말)</p>
+    <p class="qtext" style="margin-top:12px">피드백 (모둠에게 전할 말)</p>
     <textarea id="fb">${esc(r.feedback)}</textarea>
     <p style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
       <span class="total" id="tot"></span>
       <button class="btn" id="gsave">💾 저장</button>
-      <button class="btn sub" id="gnext">저장하고 다음 학생 →</button>
+      <button class="btn sub" id="gnext">저장하고 다음 모둠 →</button>
     </p>`;
   const inputs = [...document.querySelectorAll('#detail input[data-q]')];
-  const sumUp = () => $('#tot').textContent = `총점 ${inputs.reduce((a, x) => a + (Number(x.value) || 0), 0)} / ${maxTotal()}점`;
-  inputs.forEach(x => x.oninput = sumUp); sumUp();
+  const sumUp = () => $('#tot').textContent = `총점 ${inputs.reduce((a, x) => a + (Number(x.value) || 0), 0)} / ${reportMax(r)}점`;
+  inputs.forEach(x => x.oninput = () => { dirty = true; sumUp(); }); sumUp();
+  $('#fb').oninput = () => dirty = true;
   document.querySelectorAll('[data-full],[data-zero]').forEach(b => b.onclick = () => {
     const id = b.dataset.full || b.dataset.zero, inp = inputs.find(x => x.dataset.q === id);
-    inp.value = b.dataset.full ? QS.find(q => q.id === id).points : 0; sumUp();
+    inp.value = b.dataset.full ? reportQS(r).find(q => q.id === id).points : 0; dirty = true; sumUp();
   });
   $('#gsave').onclick = () => saveGrade(false);
   $('#gnext').onclick = () => saveGrade(true);
 
+  const options = [REPORTS.find(x=>x.email===r.email), ...HISTORY.filter(x=>x.email===r.email).slice().reverse().map(x=>({...x,_archived:true}))].filter(Boolean);
+  const selector=$('#submissionHistory');
+  options.forEach((x,i)=>selector.add(new Option((i===0?'현재 제출':'과거 제출')+' · '+x.at,i)));
+  selector.value=String(options.findIndex(x=>x===r || (x._archived && r._archived && x.at===r.at && x.id===r.id)));
+  selector.onchange=()=>{if(leaveOk())openReport(options[Number(selector.value)]);};
+  if(r._archived) { inputs.forEach(x=>x.disabled=true); $('#fb').readOnly=true; document.querySelectorAll('[data-full],[data-zero],#gsave,#gnext').forEach(b=>b.hidden=true); }
   const key = r.cls + '-' + r.group;
   (groupCache[key] ??= api('loadGroup', r.cls, r.group)).then(g => {
     if (cur !== r) return;
-    $('#gdata').innerHTML = !g ? '제출된 모둠 데이터가 없어요.' : `배경 조도 ${g.bg} lx<table><tr><th>d (cm)</th><th>측정 (lx)</th><th>배경 뺀 값</th></tr>${
-      g.rows.map(x => `<tr><td>${x.d}</td><td>${x.lux}</td><td>${(x.lux - g.bg).toFixed(1)}</td></tr>`).join('')}</table>`;
-  }).catch(() => { delete groupCache[key]; });
+    $('#gdata').innerHTML = !g ? '제출된 모둠 자료가 없어요.' : dataTable(g);
+  }).catch(e => { delete groupCache[key]; if(cur===r) $('#gdata').textContent='자료 불러오기 실패: '+e.message+' · 새로고침으로 재시도하세요.'; });
   const box = document.querySelector('#detail [data-img]');
   if (box && r.img) {
     box.textContent = '그래프 불러오는 중…';
-    api('getImage', r.img).then(src => { if (cur === r) box.innerHTML = src ? `<img class="graph" src="${src}" alt="학생 그래프">` : ''; })
+    api('getImage', r.img).then(src => { if (cur === r) box.innerHTML = src ? `<img class="graph" src="${src}" alt="모둠 그래프">` : ''; })
       .catch(() => box.textContent = '그래프를 불러오지 못했어요.');
   }
 }
 
 async function saveGrade(next) {
+  if (cur?._archived) return toast('과거 제출은 열람 전용이에요. 현재 제출을 선택해 주세요.');
   const r = cur, scores = {};
   for (const x of document.querySelectorAll('#detail input[data-q]')) {
-    const q = QS.find(q => q.id === x.dataset.q);
+    const q = reportQS(r).find(q => q.id === x.dataset.q);
     if (x.value === '') continue;
     if (!(Number(x.value) >= 0 && Number(x.value) <= q.points)) return toast(`점수는 0 ~ ${q.points}점 사이로 입력하세요.`);
     scores[q.id] = Number(x.value);
   }
   $('#gsave').disabled = $('#gnext').disabled = true;
   try {
-    const total = await api('saveGrade', r.email, scores, $('#fb').value);
+    const total = await api('saveGrade', r.email, scores, $('#fb').value, r.id);
     Object.assign(r, { scores, total, feedback: $('#fb').value, status: '채점완료' });
+    dirty = false;
     toast(`${r.name} 저장 (${total}점)`);
     const rows = filtered(), i = rows.findIndex(x => x.email === r.email);
     renderList();
-    if (next) { const n = rows[i + 1]; n ? openReport(n) : toast('마지막 학생이에요.'); }
+    if (next) { const n = rows.slice(i + 1).find(x => x.status !== '미제출'); n ? openReport(n) : toast('마지막 모둠이에요.'); }
     else openReport(r);
   } catch (e) { toast('저장 실패: ' + e.message); $('#gsave').disabled = $('#gnext').disabled = false; }
 }
@@ -245,7 +315,7 @@ async function saveGrade(next) {
 function renderQEdit() {
   $('#qedit').innerHTML = QS.map((q, i) => `<tr data-i="${i}">
     <td><button class="btn sub sm" data-up ${i ? '' : 'disabled'}>↑</button><button class="btn sub sm" data-down ${i < QS.length - 1 ? '' : 'disabled'}>↓</button></td>
-    <td><select data-f="stage">${['설계', '분석'].map(s => `<option ${q.stage === s ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
+    <td><select data-f="stage">${['설계', '그래프'].map(s => `<option ${q.stage === s ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
     <td><select data-f="type">${Object.entries(TYPE_NAME).map(([k, v]) => `<option value="${k}" ${q.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
     <td><textarea data-f="text">${esc(q.text)}</textarea></td>
     <td><input type="number" data-f="points" min="0" max="100" step="0.5" value="${q.points}" style="width:70px"></td>
@@ -257,6 +327,7 @@ function renderQEdit() {
     tr.querySelectorAll('[data-f]').forEach(el => el.onchange = el.oninput = () => {
       const f = el.dataset.f;
       q[f] = f === 'required' ? el.checked : f === 'points' ? Number(el.value) || 0 : el.value;
+      if(f==='type'){ q.stage=q.type==='graph'?'그래프':'설계'; tr.querySelector('[data-f=stage]').value=q.stage; }
       $('#qtotal').textContent = `총 배점 ${maxTotal()}점`;
     });
     const move = d => { [QS[i], QS[i + d]] = [QS[i + d], QS[i]]; renderQEdit(); };
@@ -265,8 +336,9 @@ function renderQEdit() {
     tr.querySelector('[data-del]').onclick = () => { QS.splice(i, 1); renderQEdit(); toast('삭제했어요. [저장]을 눌러야 반영돼요.'); };
   });
 }
-$('#qadd').onclick = () => { QS.push({ id: '', stage: '분석', type: 'text', text: '', points: 1, required: false }); renderQEdit(); };
+$('#qadd').onclick = () => { QS.push({ id: '', stage: '설계', type: 'text', text: '', points: 1, required: false }); renderQEdit(); };
 $('#qsave').onclick = async () => {
+  if (!leaveOk()) return;
   $('#qsave').disabled = true;
   try { QS = await api('saveQuestions', QS); renderQEdit(); renderList(); if (cur) openReport(cur); toast('문항을 저장했어요 ✅'); }
   catch (e) { toast('저장 실패: ' + e.message); }

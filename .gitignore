@@ -1,0 +1,6 @@
+node_modules/
+firebase-debug.log
+# Unpublished Sites attempt; active GitHub Pages sensor assets are in sensor/.
+/sensor-hosting/
+# Cancelled account-migration record, not part of the active deployment.
+/artifacts/deployments/senedu.json
