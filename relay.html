@@ -1,7 +1,7 @@
 <!doctype html><html><head><meta charset="utf-8"></head><body><script>
 // This embedded page only carries student RPCs. Bluetooth runs in the top-level student page.
 const channel=<?!= JSON.stringify(channel) ?>,studentOrigin='https://soomsci.github.io';
-const allowed=new Set(['getConfig','submitGroup','loadGroup','submitReport']);
+const allowed=new Set(['getConfig','submitGroup','submitReport']);
 window.addEventListener('message',event=>{
   const m=event.data;
   if(event.origin!==studentOrigin||event.source!==window.top||m?.channel!==channel||m.type!=='ldexp-request'||!allowed.has(m.fn)||!Array.isArray(m.args)||typeof m.id!=='string')return;

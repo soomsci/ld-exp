@@ -67,7 +67,6 @@ const {pathToFileURL} = require('node:url');
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('dev-report')).data.rows[0].lux),snapshot);
  assert.match(await page.locator('#groupStatus').innerText(),/다시 제출/);
  // Import restores exact submitted rows, with confirmation before replacing local data.
- await page.locator('[data-tab=t2]').click();await page.locator('#gload').click();assert.equal(await page.evaluate(()=>S.rows.find(r=>r.round===1&&r.d===5).lux),105);
  await page.reload();await page.waitForFunction(()=>ready);assert.equal(await page.evaluate(()=>S.rows.length),18);assert.equal(await page.evaluate(()=>S.graph.analysis.origin),'unclear');
  await page.locator('[data-tab=t3]').click();await page.locator('#measureTable [data-record="1:5"]').click();await page.locator('#deleteRecord').click();assert.equal(await page.evaluate(()=>mean(5)),null);assert.equal(await page.evaluate(()=>S.history.at(-1).action),'delete');
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'artifacts/measurement-mobile.png',fullPage:true});

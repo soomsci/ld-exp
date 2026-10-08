@@ -19,7 +19,7 @@ function harness(){
 }
 let h=harness();h.ctx.confirmed=false;h.api.resetMeasurements();assert.deepEqual(h.state(),initial);assert.equal(h.store.size,1);
 h=harness();vm.runInContext('measuring=true',h.ctx);h.api.resetMeasurements();assert.equal(h.ctx.confirmCount,0);assert.deepEqual(h.state(),initial);
-h=harness();h.$('#gload').disabled=true;h.api.resetMeasurements();assert.equal(h.ctx.confirmCount,0);assert.deepEqual(h.state(),initial);
+h=harness();h.$('#gdraft').disabled=true;h.api.resetMeasurements();assert.equal(h.ctx.confirmCount,0);assert.deepEqual(h.state(),initial);
 for(const failKey of ['ldexp-v2-reset-backup','ldexp-v2']){
  h=harness();h.ctx.failKey=failKey;h.api.resetMeasurements();assert.deepEqual(h.state(),initial);assert.deepEqual(JSON.parse(h.store.get('ldexp-v2')),initial);
 }

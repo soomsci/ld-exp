@@ -69,10 +69,10 @@
     <div class="card">
       <div class="filters">
         <select id="fcls"><option value="">전체 반</option><option value="1">1반</option><option value="2">2반</option><option value="3">3반</option><option value="4">4반</option></select>
-        <select id="fstat"><option value="">전체 상태</option><option value="todo">채점 필요</option><option value="done">채점완료</option><option value="none">미제출</option></select>
+        <select id="fstat"><option value="">전체 상태</option><option value="measurement">측정 자료 제출</option><option value="draft">측정 중</option><option value="todo">보고서 채점 필요</option><option value="done">채점완료</option><option value="none">미제출</option></select>
         <span class="muted" id="summary"></span>
       </div>
-      <p class="muted" id="rosterHint" hidden>학생용은 로그인 없이 사용하며, 설계부터 그래프 분석까지 반·모둠별로 제출해요. 구성원 4명은 제출 당시 자료에서 확인하세요.</p>
+      <p class="muted" id="rosterHint" hidden>측정 자료 제출·임시 저장도 목록에서 확인할 수 있어요. 최종 보고서는 학생이 ‘모둠 실험 기록·그래프 분석 제출’을 누르면 표시돼요. 새 제출은 새로고침으로 확인하세요.</p>
       <div class="scroll"><table><thead><tr><th>반</th><th>모둠</th><th>구성원</th><th>제출</th><th>상태</th><th>총점</th></tr></thead><tbody id="list"></tbody></table></div>
     </div>
     <div class="card" id="detail"><p class="muted">왼쪽 목록에서 모둠을 고르세요.</p></div>
@@ -180,14 +180,17 @@ $('#export').onclick = async () => {
 const graded = r => r.status === '채점완료';
 function filtered() {
   const c = $('#fcls').value, st = $('#fstat').value;
-  const want = { done: graded, todo: r => r.status === '제출' || r.status === '재제출', none: r => r.status === '미제출' }[st];
+  const want = { done: graded, todo: r => r.status === '제출' || r.status === '재제출', none: r => r.status === '미제출', measurement: r => r.measurementOnly && r.status === '측정 자료 제출', draft: r => r.measurementOnly && r.status === '측정 중' }[st];
   return REPORTS.filter(r => (!c || r.cls == c) && (!want || want(r)))
     .sort((a, b) => a.cls - b.cls || a.group - b.group || a.num - b.num);
 }
 function renderList() {
   const rows = filtered(), done = rows.filter(graded), none = rows.filter(r => r.status === '미제출').length;
+  const measurement = rows.filter(r => r.measurementOnly && r.status === '측정 자료 제출').length;
+  const drafts = rows.filter(r => r.measurementOnly && r.status === '측정 중').length;
+  const final = rows.filter(r => !r.measurementOnly && r.status !== '미제출').length;
   const avg = done.length ? (done.reduce((a, r) => a + Number(r.total || 0), 0) / done.length).toFixed(1) : '–';
-  $('#summary').textContent = `제출 ${rows.length - none}모둠${none ? ` · 미제출 ${none}모둠` : ''} · 채점완료 ${done.length}모둠 · 평균 ${avg}점 (제출별 만점 확인)`;
+  $('#summary').textContent = `측정 자료 ${measurement}모둠 · 측정 중 ${drafts}모둠 · 보고서 ${final}모둠${none ? ` · 미제출 ${none}모둠` : ''} · 채점완료 ${done.length}모둠 · 평균 ${avg}점 (보고서 기준)`;
   $('#list').innerHTML = rows.map(r => `<tr data-email="${esc(r.email)}" class="${cur?.email === r.email ? 'sel' : ''}">
     <td>${r.cls}</td><td>${r.group}</td><td>${r.groupActivity ? esc((r.data?.members||[]).filter(m=>m.name).map(m=>m.num+'번 '+m.name).join(', ')||'구성원 미입력') : esc(r.num+'번 '+r.name)+' (이전 개인 제출)'}</td><td class="muted">${esc(r.at)}</td>
     <td><span class="badge s-${esc(r.status)}">${esc(r.status)}</span></td><td>${r.total === '' ? '' : r.total}</td></tr>`).join('')
@@ -215,7 +218,7 @@ function showAnswer(q, a) {
     const labels={distance:'거리 d (cm)',squared:'거리의 제곱 d² (cm²)',inverseSquared:'거리 제곱의 역수 1/d² (cm⁻²)',mean:'평균 빛의 밝기 (lx)',unclear:'판단하기 어려움'};
     const analysis=a.analysis;
     const notes=analysis?Object.entries(analysis.observations||{}).filter(([axis])=>['distance','squared','inverseSquared'].includes(axis)).map(([axis,text])=>`${esc(labels[axis])}: ${esc(text)||'–'}`).join('\n'):'';
-    return `<div class="ans">제목: ${esc(a.title)}\n가로축: ${esc(labels[a.xaxis] || a.xaxis)}\n세로축: ${esc(labels[a.yaxis] || a.yaxis)}\n회차별 점: ${a.showTrials?'표시':'숨김'}\n평균점 점선 연결: ${a.connectPoints?'표시':'숨김'}${analysis?`\n\n산점도별 관찰\n${notes}\n\n가장 직선에 가까운 축: ${esc(labels[analysis.linearAxis]||analysis.linearAxis)}\n1/d² 산점도와 원점: ${esc({yes:'원점 가까이를 지나는 직선으로 볼 수 있음',no:'원점에서 벗어나거나 휘어짐',unclear:'판단하기 어려움'}[analysis.origin]||'–')}\n분석 근거: ${esc(analysis.reason)}`:'\n분석 활동 확장 이전 제출 · 당시 그래프 구성 보존'}<br><span class="muted">산점도와 실제 측정 근거를 함께 검토하세요. 예상과 다른 관찰도 그대로 보존해요.</span></div><div data-img></div>`;
+    return `<div class="ans">제목: ${esc(a.title)}\n가로축: ${esc(labels[a.xaxis] || a.xaxis)}\n세로축: ${esc(labels[a.yaxis] || a.yaxis)}\n회차별 점: ${a.showTrials?'표시':'숨김'}\n평균점 점선 연결: ${a.connectPoints?'표시':'숨김'}${analysis?`\n\n산점도별 관찰\n${notes}\n\n가장 직선에 가까운 축: ${esc(labels[analysis.linearAxis]||analysis.linearAxis)}\n1/d² 산점도와 원점: ${esc({yes:'원점 가까이를 지나는 직선으로 볼 수 있음',no:'원점에서 벗어나거나 휘어짐',unclear:'판단하기 어려움'}[analysis.origin]||'–')}\n분석 근거: ${esc(analysis.reason)}`:'\n분석 활동 확장 이전 제출 · 당시 그래프 구성 보존'}</div><div data-img></div>`;
   }
   if (q.type === 'graph') return `<div class="ans">선택한 x축: <b>${esc(a.xaxis)}</b> ${mark(a.xaxis === '1/d²')} · R² = ${a.r2 != null ? Number(a.r2).toFixed(4) : '–'}
 <span class="muted">R² 비교: ${esc(a.r2table)}</span></div><div data-img></div>`;
@@ -237,6 +240,13 @@ const groupCache = {};
 async function openReport(r) {
   cur = r; dirty = false;
   document.querySelectorAll('#list tr').forEach(tr => tr.classList.toggle('sel', tr.dataset.email === r.email));
+  if (r.measurementOnly) {
+    $('#detail').innerHTML = `<h2 style="margin:0">${r.cls}반 ${r.group}모둠 <span class="badge">${esc(r.status)}</span></h2>
+      <p class="muted">서버 저장 ${esc(r.at)} · 측정값 ${(r.data?.rows || []).length}개</p>
+      <p>측정 자료가 저장되어 있어요. 최종 보고서는 아직 제출하지 않았어요. 학생 화면에서 그래프·분석을 작성하고 ‘모둠 실험 기록·그래프 분석 제출’을 누르면 보고서도 확인할 수 있어요.</p>
+      <div class="scroll">${dataTable(r.data)}</div>`;
+    return;
+  }
   if (r.status === '미제출') {
     $('#detail').innerHTML = `<h2 style="margin:0">${r.groupActivity ? r.cls+'반 '+r.group+'모둠' : r.cls+'반 '+r.num+'번 '+esc(r.name)+' (이전 개인 제출)'} <span class="badge s-미제출">미제출</span></h2><p class="muted">${esc(r.email)} · ${r.group}모둠 · 아직 보고서를 제출하지 않았어요.</p>`;
     return;

@@ -171,9 +171,6 @@ function submitReport(r, studentToken) {
   if (!name) throw new Error('이름을 입력해 주세요.');
 
   const snapshot = validateData_(r.data, true);
-  const source = submittedData_(r.sourceId, cls, group);
-  if (JSON.stringify(snapshot) !== JSON.stringify(validateData_(source, true))) throw new Error('자료가 제출 후 변경됐어요. 모둠 자료를 다시 제출해 주세요.');
-  Object.assign(snapshot, { id: source.id, cls, group, by: source.by, at: source.at, status: 'submitted' });
   const graph = graph_(r.graph);
   const qs = questions_(), src = r.answers || {}, answers = {};
   qs.forEach(q => {
@@ -190,8 +187,12 @@ function submitReport(r, studentToken) {
 
   let imgId = '';
   if (!/^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(r.png || '')) throw new Error('그래프 PNG 이미지가 필요해요.');
+  if (r.png.length > 3e6) throw new Error('그래프 이미지가 너무 커요.');
+  const source = r.sourceId ? submittedData_(r.sourceId, cls, group)
+    : submitGroup({ ...snapshot, cls, group, status: 'submitted' }, studentToken);
+  if (JSON.stringify(snapshot) !== JSON.stringify(validateData_(source, true))) throw new Error('자료가 제출 후 변경됐어요. 현재 측정 자료로 다시 제출해 주세요.');
+  Object.assign(snapshot, { id: source.id, cls, group, by: source.by, at: source.at, status: 'submitted' });
   if (r.png) {
-    if (r.png.length > 3e6) throw new Error('그래프 이미지가 너무 커요.');
     const bytes = Utilities.base64Decode(String(r.png).split(',').pop());
     imgId = folder_().createFile(Utilities.newBlob(bytes, 'image/png', `${cls}반_${num}번_${name}.png`)).getId();
   }
@@ -205,7 +206,7 @@ function submitReport(r, studentToken) {
       sameVersion ? old[C.scores] : '', sameVersion ? old[C.fb] : '', sameVersion ? old[C.total] : '', sameVersion ? old[C.gradedAt] : '',
       old ? '재제출' : '제출', 2, JSON.stringify(qs), JSON.stringify(snapshot), source.id, Utilities.getUuid()];
     if (i) sh.getRange(i, 1, 1, row.length).setValues([row]); else sh.appendRow(row);
-    return { id: row[17], at: row[5].toISOString() };
+    return { id: row[17], at: row[5].toISOString(), sourceId: source.id, sourceAt: source.at };
   });
 }
 
@@ -213,12 +214,28 @@ function submitReport(r, studentToken) {
 function listReports() {
   requireTeacher_();
   const values = sheet_('제출').getDataRange().getValues().slice(1);
+  const reports = values.filter(v => v[C.email]).map(reportValue_);
+  const reportedGroups = new Set(reports.map(r => r.cls + ':' + r.group));
+  const latestGroups = new Map();
+  sheet_('모둠데이터').getDataRange().getValues().slice(1).forEach((v, i) => {
+    if (!v[1] || !v[2] || !v[6]) return;
+    const data = groupValue_(v, i + 1);
+    if (data) latestGroups.set(v[1] + ':' + v[2], { data, cls: v[1], group: v[2], at: fmtDate_(v[0]) });
+  });
+  latestGroups.forEach(({ data, cls, group, at }, key) => {
+    if (reportedGroups.has(key)) return;
+    reports.push({ email: 'measurement:' + key, groupActivity: true, measurementOnly: true,
+      cls, group, num: group, name: group + '모둠', at,
+      status: data.status === 'draft' ? '측정 중' : '측정 자료 제출',
+      data, answers: {}, scores: {}, total: '', feedback: '', questions: [], version: data.version,
+      id: data.id, sourceId: data.id });
+  });
   return {
     questions: questions_(),
     sheetUrl: SpreadsheetApp.getActive().getUrl(),
     roster: roster_(),
     history: sheet_('제출이력').getDataRange().getValues().slice(1).filter(v => v[1]).map(v => reportValue_(v.slice(1))),
-    reports: values.filter(v => v[C.email]).map(reportValue_),
+    reports,
   };
 }
 function reportValue_(v) {
@@ -287,7 +304,8 @@ function saveQuestions(list) {
 // 성적표: 반/번호/이름/문항별 점수/총점/피드백 (CSV 다운로드와 '성적' 시트가 같이 씀)
 function gradeTable() {
   requireTeacher_();
-  const { questions, reports, roster } = listReports();
+  const { questions, reports: activityReports, roster } = listReports();
+  const reports = activityReports.filter(r => !r.measurementOnly);
   const all = [...questions];
   reports.forEach(r => (r.questions || []).forEach(q => { if (!all.some(x => x.id === q.id && x.text === q.text && x.points === q.points)) all.push(q); }));
   const header = ['반', '모둠', '제출 단위', ...Array.from({length:4}, (_,i) => ['모둠원'+(i+1)+' 번호', '모둠원'+(i+1)+' 이름']).flat(),
