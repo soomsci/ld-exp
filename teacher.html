@@ -54,6 +54,7 @@
 <header>
   <h1>📋 교사 대시보드: 빛의 세기와 거리</h1>
   <button class="btn sub" id="reload">🔄 새로고침</button>
+  <span class="muted" id="refreshStatus" role="status">목록 불러오는 중…</span>
   <button class="btn" id="csv">⬇️ 성적 다운로드 (CSV)</button>
   <button class="btn sub" id="export">📊 성적표 시트로 내보내기</button>
   <a class="btn sub" id="sheet" target="_blank">시트 열기</a>
@@ -133,6 +134,7 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
 
 // ---------- 데이터 ----------
 let QS = [], REPORTS = [], HISTORY = [], cur = null, dirty = false;
+let refreshing = false;
 const reportQS = r => r?.questions || QS;
 const reportMax = r => reportQS(r).reduce((sum,q)=>sum+q.points,0);
 // 저장 안 한 점수가 있으면 확인 후 진행
@@ -140,16 +142,40 @@ const leaveOk = () => !dirty || confirm('저장하지 않은 점수/피드백이
 addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
 const maxTotal = () => QS.reduce((a, q) => a + q.points, 0);
 async function load() {
+  if (refreshing) return;
+  refreshing = true;
+  const button = $('#reload');
+  button.disabled = true; button.textContent = '갱신 중…';
+  $('#refreshStatus').textContent = '서버에서 최신 자료를 불러오는 중…';
+  let timer;
   try {
-    const d = await api('listReports');
+    const d = await Promise.race([
+      api('listReports'),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('서버 응답이 지연됐어요. 새로고침을 다시 눌러 주세요.')), 45000); }),
+    ]);
+    const selected = cur;
     QS = d.questions; HISTORY = d.history || []; Object.keys(groupCache).forEach(k=>delete groupCache[k]); $('#sheet').href = d.sheetUrl;
-    const done = new Set(d.reports.map(r => String(r.email).toLowerCase()));
     REPORTS = d.reports;
     $('#rosterHint').hidden = false;
     dirty = false;
     renderList(); renderQEdit();
-    if (cur) { const r = REPORTS.find(x => x.email === cur.email); r ? openReport(r) : $('#detail').innerHTML = ''; }
-  } catch (e) { toast('불러오기 실패: ' + e.message); }
+    if (selected) {
+      const r = REPORTS.find(x => x.email === selected.email)
+        || (selected.groupActivity && REPORTS.find(x => x.groupActivity && String(x.cls) === String(selected.cls) && String(x.group) === String(selected.group)));
+      if (r) await openReport(r);
+      else { cur = null; $('#detail').innerHTML = '<p class="muted">왼쪽 목록에서 모둠을 고르세요.</p>'; }
+    }
+    const shown = filtered().length;
+    $('#refreshStatus').textContent = '갱신 완료 · ' + new Date().toLocaleTimeString('ko-KR') + ' · 전체 ' + REPORTS.length + '건'
+      + (shown !== REPORTS.length ? ' · 현재 필터 ' + shown + '건' : '');
+    $('#notice').textContent = shown !== REPORTS.length ? '전체 자료를 보려면 반과 상태를 ‘전체’로 선택하세요.' : '';
+  } catch (e) {
+    $('#refreshStatus').textContent = '갱신 실패 · 기존 목록 유지';
+    toast('불러오기 실패: ' + e.message);
+  } finally {
+    clearTimeout(timer); refreshing = false;
+    button.disabled = false; button.textContent = '🔄 새로고침';
+  }
 }
 $('#reload').onclick = () => leaveOk() && load();
 // 엑셀에서 한글이 안 깨지도록 BOM 포함, 수식으로 실행되지 않도록 = + - @ 앞에 ' 추가
