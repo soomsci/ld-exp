@@ -24,7 +24,7 @@ HEADERS['제출이력'] = ['보관시각', ...HEADERS['제출']];
 const DEFAULT_QUESTIONS = [
   ['q1', 1, '설계', 'text', '가설: 거리와 빛의 밝기 사이에 어떤 관계가 있을지 예상해서 써 보세요.', 2, true],
   ['q2', 2, '설계', 'vars', '변인 정하기: 독립변인, 종속변인, 통제변인을 고르세요.', 3, true],
-  ['q3', 3, '설계', 'text', '모둠 측정 계획: 거리 조건과 같은 조건으로 3회 측정할 방법을 써 보세요.', 1, false],
+  ['q3', 3, '설계', 'text', '모둠 측정 계획', 1, false],
   ['q4', 4, '그래프', 'graph', '가로축을 바꿔 산점도를 비교하고, 빛의 밝기와 거리 제곱의 역수 사이의 비례 관계를 분석하세요.', 2, true],
 ];
 
@@ -346,7 +346,10 @@ function questions_() {
     if (!initial.some(q => q[3] === 'graph')) initial.push(DEFAULT_QUESTIONS[3]);
     sh.getRange(2, 1, initial.length, 7).setValues(initial);
   }
-  return readQuestions_(sh).map(q => ({...q, text: q.text.replace(/개인 측정 계획/g, '모둠 측정 계획')}));
+  return readQuestions_(sh).map(q => {
+    const text = q.text.replace(/개인 측정 계획/g, '모둠 측정 계획');
+    return {...q, text: q.id === 'q3' ? text.replace(/^모둠 측정 계획\s*[:：].*$/, '모둠 측정 계획') : text};
+  });
 }
 
 // 명렬표: 비어 있으면 학생이 직접 입력, 채워져 있으면 명렬표 값을 강제
